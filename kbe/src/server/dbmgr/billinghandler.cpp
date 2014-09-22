@@ -20,7 +20,7 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 #include "dbmgr.hpp"
 #include "billinghandler.hpp"
 #include "buffered_dbtasks.hpp"
-#include "db_threadpool.hpp"
+#include "dbmgr_lib/db_threadpool.hpp"
 #include "thread/threadpool.hpp"
 #include "thread/threadguard.hpp"
 #include "server/serverconfig.hpp"
@@ -204,7 +204,7 @@ bool BillingHandler_ThirdParty::createAccount(Mercury::Channel* pChannel, std::s
 			return false;
 	}
 
-	(*(*bundle)).send(Dbmgr::getSingleton().getNetworkInterface(), pBillingChannel_);
+	(*(*bundle)).send(Dbmgr::getSingleton().networkInterface(), pBillingChannel_);
 	return true;
 }
 
@@ -254,7 +254,7 @@ bool BillingHandler_ThirdParty::loginAccount(Mercury::Channel* pChannel, std::st
 			return false;
 	}
 
-	(*(*bundle)).send(Dbmgr::getSingleton().getNetworkInterface(), pBillingChannel_);
+	(*(*bundle)).send(Dbmgr::getSingleton().networkInterface(), pBillingChannel_);
 	return true;
 }
 
@@ -297,7 +297,7 @@ bool BillingHandler_ThirdParty::reconnect()
 	if(pBillingChannel_)
 	{
 		if(!pBillingChannel_->isDestroyed())
-			Dbmgr::getSingleton().getNetworkInterface().deregisterChannel(pBillingChannel_);
+			Dbmgr::getSingleton().networkInterface().deregisterChannel(pBillingChannel_);
 
 		pBillingChannel_->decRef();
 	}
@@ -315,7 +315,7 @@ bool BillingHandler_ThirdParty::reconnect()
 	pEndPoint->setnonblocking(true);
 	pEndPoint->setnodelay(true);
 
-	pBillingChannel_ = new Mercury::Channel(Dbmgr::getSingleton().getNetworkInterface(), pEndPoint, Mercury::Channel::INTERNAL);
+	pBillingChannel_ = new Mercury::Channel(Dbmgr::getSingleton().networkInterface(), pEndPoint, Mercury::Channel::INTERNAL);
 	pBillingChannel_->incRef();
 
 	int trycount = 0;
@@ -342,8 +342,8 @@ bool BillingHandler_ThirdParty::reconnect()
 
 			if(trycount > 3)
 			{
-				ERROR_MSG(boost::format("BillingHandler_ThirdParty::reconnect(): couldn't connect to:%1%\n") % 
-					pBillingChannel_->endpoint()->addr().c_str());
+				ERROR_MSG(fmt::format("BillingHandler_ThirdParty::reconnect(): couldn't connect to:{}\n", 
+					pBillingChannel_->endpoint()->addr().c_str()));
 				
 				pBillingChannel_->destroy();
 				return false;
@@ -353,7 +353,7 @@ bool BillingHandler_ThirdParty::reconnect()
 
 	// ²»¼ì²é³¬Ê±
 	pBillingChannel_->stopInactivityDetection();
-	Dbmgr::getSingleton().getNetworkInterface().registerChannel(pBillingChannel_);
+	Dbmgr::getSingleton().networkInterface().registerChannel(pBillingChannel_);
 	return true;
 }
 
@@ -376,8 +376,8 @@ void BillingHandler_ThirdParty::charge(Mercury::Channel* pChannel, KBEngine::Mem
 	s.readBlob(datas);
 	s >> cbid;
 
-	INFO_MSG(boost::format("BillingHandler_ThirdParty::charge: chargeID=%1%, dbid=%4%, cbid=%2%, datas=%3%!\n") %
-		chargeID % cbid % datas % dbid);
+	INFO_MSG(fmt::format("BillingHandler_ThirdParty::charge: chargeID={0}, dbid={3}, cbid={1}, datas={2}!\n",
+		chargeID, cbid, datas, dbid));
 
 	KBE_ASSERT(pBillingChannel_);
 
@@ -396,7 +396,7 @@ void BillingHandler_ThirdParty::charge(Mercury::Channel* pChannel, KBEngine::Mem
 			return;
 	}
 
-	(*(*bundle)).send(Dbmgr::getSingleton().getNetworkInterface(), pBillingChannel_);
+	(*(*bundle)).send(Dbmgr::getSingleton().networkInterface(), pBillingChannel_);
 }
 
 //-------------------------------------------------------------------------------------
@@ -416,14 +416,14 @@ void BillingHandler_ThirdParty::onChargeCB(KBEngine::MemoryStream& s)
 	s >> cbid;
 	s >> success;
 
-	INFO_MSG(boost::format("BillingHandler_ThirdParty::onChargeCB: chargeID=%1%, dbid=%4%, cbid=%2%, cid=%5%, datas=%3%!\n") %
-		chargeID % cbid % datas % dbid % cid);
+	INFO_MSG(fmt::format("BillingHandler_ThirdParty::onChargeCB: chargeID={0}, dbid={3}, cbid={1}, cid={4}, datas={2}!\n",
+		chargeID, cbid, datas, dbid, cid));
 
 	Components::ComponentInfos* cinfos = Components::getSingleton().findComponent(BASEAPP_TYPE, cid);
 	if(cinfos == NULL || cinfos->pChannel == NULL || cinfos->pChannel->isDestroyed())
 	{
-		ERROR_MSG(boost::format("BillingHandler_ThirdParty::onChargeCB: baseapp not found!, chargeID=%1%, cid=%2%.\n") 
-			% chargeID % cid);
+		ERROR_MSG(fmt::format("BillingHandler_ThirdParty::onChargeCB: baseapp not found!, chargeID={}, cid={}.\n", 
+			chargeID, cid));
 
 		return;
 	}
@@ -437,7 +437,7 @@ void BillingHandler_ThirdParty::onChargeCB(KBEngine::MemoryStream& s)
 	(*(*bundle)) << cbid;
 	(*(*bundle)) << success;
 
-	(*(*bundle)).send(Dbmgr::getSingleton().getNetworkInterface(), cinfos->pChannel);
+	(*(*bundle)).send(Dbmgr::getSingleton().networkInterface(), cinfos->pChannel);
 }
 
 //-------------------------------------------------------------------------------------
@@ -456,7 +456,7 @@ void BillingHandler_ThirdParty::eraseClientReq(Mercury::Channel* pChannel, std::
 			return;
 	}
 
-	(*(*bundle)).send(Dbmgr::getSingleton().getNetworkInterface(), pBillingChannel_);
+	(*(*bundle)).send(Dbmgr::getSingleton().networkInterface(), pBillingChannel_);
 }
 
 

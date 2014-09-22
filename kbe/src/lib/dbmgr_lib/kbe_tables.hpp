@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef __KBE_KBE_TABLES__
-#define __KBE_KBE_TABLES__
+#ifndef KBE_KBE_TABLES_HPP
+#define KBE_KBE_TABLES_HPP
 
 #include "entity_table.hpp"
 #include "cstdkbe/cstdkbe.hpp"
@@ -86,7 +86,7 @@ public:
 
 	virtual bool queryEntity(DBInterface * dbi, DBID dbid, EntityLog& entitylog, ENTITY_SCRIPT_UID entityType) = 0;
 
-	virtual bool eraseEntityLog(DBInterface * dbi, DBID dbid) = 0;
+	virtual bool eraseEntityLog(DBInterface * dbi, DBID dbid, ENTITY_SCRIPT_UID entityType) = 0;
 protected:
 	
 };
@@ -174,4 +174,4 @@ protected:
 
 }
 
-#endif // __KBE_KBE_TABLES__
+#endif // KBE_KBE_TABLES_HPP
