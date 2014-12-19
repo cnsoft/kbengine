@@ -19,19 +19,19 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "common.hpp"
-#include "network/channel.hpp"
-#include "network/bundle.hpp"
-#include "network/tcp_packet.hpp"
-#include "network/udp_packet.hpp"
-#include "network/message_handler.hpp"
-#include "network/tcp_packet_receiver.hpp"
-#include "network/udp_packet_receiver.hpp"
-#include "network/address.hpp"
-#include "helper/watcher.hpp"
+#include "common.h"
+#include "network/channel.h"
+#include "network/bundle.h"
+#include "network/tcp_packet.h"
+#include "network/udp_packet.h"
+#include "network/message_handler.h"
+#include "network/tcp_packet_receiver.h"
+#include "network/udp_packet_receiver.h"
+#include "network/address.h"
+#include "helper/watcher.h"
 
 namespace KBEngine { 
-namespace Mercury
+namespace Network
 {
 
 float g_channelInternalTimeout = 60.f;
@@ -41,7 +41,7 @@ int8 g_channelExternalEncryptType = 0;
 
 uint32 g_SOMAXCONN = 5;
 
-// mercury stats
+// network stats
 uint64						g_numPacketsSent = 0;
 uint64						g_numPacketsReceived = 0;
 uint64						g_numBytesSent = 0;
@@ -94,7 +94,7 @@ void finalise(void)
 
 	MessageHandlers::finalise();
 	
-	Mercury::destroyObjPool();
+	Network::destroyObjPool();
 }
 
 //-------------------------------------------------------------------------------------

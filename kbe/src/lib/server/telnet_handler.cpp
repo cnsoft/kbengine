@@ -19,15 +19,15 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "telnet_handler.hpp"
-#include "telnet_server.hpp"
-#include "network/bundle.hpp"
-#include "network/endpoint.hpp"
-#include "network/network_interface.hpp"
-#include "pyscript/script.hpp"
+#include "telnet_handler.h"
+#include "telnet_server.h"
+#include "network/bundle.h"
+#include "network/endpoint.h"
+#include "network/network_interface.h"
+#include "pyscript/script.h"
 
 #ifndef CODE_INLINE
-#include "telnet_handler.ipp"
+#include "telnet_handler.inl"
 #endif
 
 namespace KBEngine { 
@@ -109,7 +109,7 @@ char _g_state_str[][256] = {
 #define TELNET_CMD_MOVE_FOCUS_RIGHT_MAX			"\33[9999999999C"	// 右移光标到最后面
 
 //-------------------------------------------------------------------------------------
-TelnetHandler::TelnetHandler(Mercury::EndPoint* pEndPoint, TelnetServer* pTelnetServer, Mercury::NetworkInterface* pNetworkInterface, TELNET_STATE defstate):
+TelnetHandler::TelnetHandler(Network::EndPoint* pEndPoint, TelnetServer* pTelnetServer, Network::NetworkInterface* pNetworkInterface, TELNET_STATE defstate):
 buffer_(),
 historyCommand_(),
 historyCommandIndex_(0),
@@ -174,8 +174,8 @@ std::string TelnetHandler::help()
 		"\r\n\t\t usage: \":pyprofile 30\""
 		"\r\n[:eventprofile  ]: a server process over a period of time, \r\n\t\tcollects and reports the all non-volatile cummunication \r\n\t\tdown to the client."
 		"\r\n\t\t usage: \":eventprofile 30\""
-		"\r\n[:mercuryprofile]: collects and reports the mercury profiles \r\n\t\tof a server process over a period of time."
-		"\r\n\t\t usage: \":mercuryprofile 30\""
+		"\r\n[:networkprofile]: collects and reports the network profiles \r\n\t\tof a server process over a period of time."
+		"\r\n\t\t usage: \":networkprofile 30\""
 		"\r\n\r\n\033[0m";
 };
 
@@ -549,11 +549,11 @@ bool TelnetHandler::processCommand()
 		readonly();
 		return false;
 	}
-	else if(cmd.find(":mercuryprofile") == 0)
+	else if(cmd.find(":networkprofile") == 0)
 	{
 		uint32 timelen = 10;
 
-		cmd.erase(cmd.find(":mercuryprofile"), strlen(":mercuryprofile"));
+		cmd.erase(cmd.find(":networkprofile"), strlen(":networkprofile"));
 		if(cmd.size() > 0)
 		{
 			try
@@ -575,7 +575,7 @@ bool TelnetHandler::processCommand()
 		std::string profileName = KBEngine::StringConv::val2str(KBEngine::genUUID64());
 
 		if(pProfileHandler_) pProfileHandler_->destroy();
-		pProfileHandler_ = new TelnetMercuryProfileHandler(this, *pTelnetServer_->pNetworkInterface(), 
+		pProfileHandler_ = new TelnetNetworkProfileHandler(this, *pTelnetServer_->pNetworkInterface(), 
 			timelen, profileName, pEndPoint_->addr());
 
 		readonly();
@@ -616,7 +616,7 @@ void TelnetHandler::processPythonCommand(std::string command)
 	if(retbuf.size() > 0)
 	{
 		// 将结果返回给客户端
-		Mercury::Bundle bundle;
+		Network::Bundle bundle;
 		bundle << retbuf;
 		bundle.send(*pEndPoint_);
 		sendEnter();
@@ -799,7 +799,7 @@ void TelnetEventProfileHandler::sendStream(MemoryStream* s)
 }
 
 //-------------------------------------------------------------------------------------
-void TelnetMercuryProfileHandler::sendStream(MemoryStream* s)
+void TelnetNetworkProfileHandler::sendStream(MemoryStream* s)
 {
 	if(isDestroyed_) return;
 

@@ -17,27 +17,26 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
-#include "bots.hpp"
-#include "clientobject.hpp"
-#include "network/common.hpp"
-#include "network/message_handler.hpp"
-#include "network/tcp_packet.hpp"
-#include "network/bundle.hpp"
-#include "network/fixed_messages.hpp"
-#include "thread/threadpool.hpp"
-#include "server/componentbridge.hpp"
-#include "server/components.hpp"
-#include "server/serverconfig.hpp"
-#include "entitydef/scriptdef_module.hpp"
-#include "entitydef/entitydef.hpp"
-#include "client_lib/client_interface.hpp"
-#include "cstdkbe/kbeversion.hpp"
+#include "bots.h"
+#include "clientobject.h"
+#include "network/common.h"
+#include "network/message_handler.h"
+#include "network/tcp_packet.h"
+#include "network/bundle.h"
+#include "network/fixed_messages.h"
+#include "thread/threadpool.h"
+#include "server/components.h"
+#include "server/serverconfig.h"
+#include "entitydef/scriptdef_module.h"
+#include "entitydef/entitydef.h"
+#include "client_lib/client_interface.h"
+#include "common/kbeversion.h"
 
-#include "baseapp/baseapp_interface.hpp"
-#include "cellapp/cellapp_interface.hpp"
-#include "baseappmgr/baseappmgr_interface.hpp"
-#include "cellappmgr/cellappmgr_interface.hpp"
-#include "loginapp/loginapp_interface.hpp"
+#include "baseapp/baseapp_interface.h"
+#include "cellapp/cellapp_interface.h"
+#include "baseappmgr/baseappmgr_interface.h"
+#include "cellappmgr/cellappmgr_interface.h"
+#include "loginapp/loginapp_interface.h"
 
 
 namespace KBEngine{
@@ -53,9 +52,9 @@ SCRIPT_GETSET_DECLARE_END()
 SCRIPT_INIT(ClientObject, 0, 0, 0, 0, 0)		
 
 //-------------------------------------------------------------------------------------
-ClientObject::ClientObject(std::string name, Mercury::NetworkInterface& ninterface):
+ClientObject::ClientObject(std::string name, Network::NetworkInterface& ninterface):
 ClientObjectBase(ninterface, getScriptType()),
-Mercury::TCPPacketReceiver(),
+Network::TCPPacketReceiver(),
 error_(C_ERROR_NONE),
 state_(C_STATE_INIT),
 pBlowfishFilter_(0)
@@ -92,7 +91,7 @@ void ClientObject::reset(void)
 //-------------------------------------------------------------------------------------
 bool ClientObject::initCreate()
 {
-	Mercury::EndPoint* pEndpoint = new Mercury::EndPoint();
+	Network::EndPoint* pEndpoint = new Network::EndPoint();
 	
 	pEndpoint->socket(SOCK_STREAM);
 	if (!pEndpoint->good())
@@ -118,7 +117,7 @@ bool ClientObject::initCreate()
 		return false;
 	}
 
-	Mercury::Address addr(infos.login_ip, infos.login_port);
+	Network::Address addr(infos.login_ip, infos.login_port);
 	pEndpoint->addr(addr);
 
 	pServerChannel_->endpoint(pEndpoint);
@@ -128,13 +127,13 @@ bool ClientObject::initCreate()
 	pServerChannel_->pMsgHandlers(&ClientInterface::messageHandlers);
 	Bots::getSingleton().pEventPoller()->registerForRead((*pEndpoint), this);
 
-	Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 	(*pBundle).newMessage(LoginappInterface::hello);
 	(*pBundle) << KBEVersion::versionString() << KBEVersion::scriptVersionString();
 
-	if(Mercury::g_channelExternalEncryptType == 1)
+	if(Network::g_channelExternalEncryptType == 1)
 	{
-		pBlowfishFilter_ = new Mercury::BlowfishFilter();
+		pBlowfishFilter_ = new Network::BlowfishFilter();
 		(*pBundle).appendBlob(pBlowfishFilter_->key());
 	}
 	else
@@ -153,16 +152,16 @@ bool ClientObject::initCreate()
 bool ClientObject::processSocket(bool expectingPacket)
 {
 	
-	Mercury::TCPPacket* pReceiveWindow = Mercury::TCPPacket::ObjPool().createObject();
+	Network::TCPPacket* pReceiveWindow = Network::TCPPacket::ObjPool().createObject();
 	int len = pReceiveWindow->recvFromEndPoint(*pServerChannel_->endpoint());
 
 	if (len < 0)
 	{
-		Mercury::TCPPacket::ObjPool().reclaimObject(pReceiveWindow);
+		Network::TCPPacket::ObjPool().reclaimObject(pReceiveWindow);
 
 		PacketReceiver::RecvState rstate = this->checkSocketErrors(len, expectingPacket);
 
-		if(rstate == Mercury::PacketReceiver::RECV_STATE_INTERRUPT)
+		if(rstate == Network::PacketReceiver::RECV_STATE_INTERRUPT)
 		{
 			Bots::getSingleton().pEventPoller()->deregisterForRead(*pServerChannel_->endpoint());
 			pServerChannel_->destroy();
@@ -170,11 +169,11 @@ bool ClientObject::processSocket(bool expectingPacket)
 			return false;
 		}
 
-		return rstate == Mercury::PacketReceiver::RECV_STATE_CONTINUE;
+		return rstate == Network::PacketReceiver::RECV_STATE_CONTINUE;
 	}
 	else if(len == 0) // 客户端正常退出
 	{
-		Mercury::TCPPacket::ObjPool().reclaimObject(pReceiveWindow);
+		Network::TCPPacket::ObjPool().reclaimObject(pReceiveWindow);
 
 		Bots::getSingleton().pEventPoller()->deregisterForRead(*pServerChannel_->endpoint());
 		pServerChannel_->destroy();
@@ -182,13 +181,13 @@ bool ClientObject::processSocket(bool expectingPacket)
 		return false;
 	}
 
-	Mercury::Reason ret = this->processPacket(pServerChannel_, pReceiveWindow);
+	Network::Reason ret = this->processPacket(pServerChannel_, pReceiveWindow);
 
-	if(ret != Mercury::REASON_SUCCESS)
+	if(ret != Network::REASON_SUCCESS)
 	{
 		ERROR_MSG(fmt::format("ClientObject::processSocket: "
 					"Throwing {}\n",
-					Mercury::reasonToString(ret)));
+					Network::reasonToString(ret)));
 	}
 
 	return true;
@@ -198,7 +197,7 @@ bool ClientObject::processSocket(bool expectingPacket)
 bool ClientObject::initLoginGateWay()
 {
 	Bots::getSingleton().pEventPoller()->deregisterForRead(*pServerChannel_->endpoint());
-	Mercury::EndPoint* pEndpoint = new Mercury::EndPoint();
+	Network::EndPoint* pEndpoint = new Network::EndPoint();
 	
 	pEndpoint->socket(SOCK_STREAM);
 	if (!pEndpoint->good())
@@ -223,7 +222,7 @@ bool ClientObject::initLoginGateWay()
 		return false;
 	}
 
-	Mercury::Address addr(ip_.c_str(), port_);
+	Network::Address addr(ip_.c_str(), port_);
 	pEndpoint->addr(addr);
 
 	pServerChannel_->endpoint(pEndpoint);
@@ -233,13 +232,13 @@ bool ClientObject::initLoginGateWay()
 	Bots::getSingleton().pEventPoller()->registerForRead((*pEndpoint), this);
 	connectedGateway_ = true;
 
-	Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 	(*pBundle).newMessage(BaseappInterface::hello);
 	(*pBundle) << KBEVersion::versionString() << KBEVersion::scriptVersionString();
 	
-	if(Mercury::g_channelExternalEncryptType == 1)
+	if(Network::g_channelExternalEncryptType == 1)
 	{
-		pBlowfishFilter_ = new Mercury::BlowfishFilter();
+		pBlowfishFilter_ = new Network::BlowfishFilter();
 		(*pBundle).appendBlob(pBlowfishFilter_->key());
 		pServerChannel_->pFilter(NULL);
 	}
@@ -333,10 +332,11 @@ void ClientObject::gameTick()
 }
 
 //-------------------------------------------------------------------------------------	
-void ClientObject::onHelloCB_(Mercury::Channel* pChannel, const std::string& verInfo, 
-		const std::string& scriptVerInfo, COMPONENT_TYPE componentType)
+void ClientObject::onHelloCB_(Network::Channel* pChannel, const std::string& verInfo, 
+		const std::string& scriptVerInfo, const std::string& protocolMD5, const std::string& entityDefMD5, 
+		COMPONENT_TYPE componentType)
 {
-	if(Mercury::g_channelExternalEncryptType == 1)
+	if(Network::g_channelExternalEncryptType == 1)
 	{
 		pChannel->pFilter(pBlowfishFilter_);
 		pBlowfishFilter_ = NULL;
@@ -353,7 +353,7 @@ void ClientObject::onHelloCB_(Mercury::Channel* pChannel, const std::string& ver
 }
 
 //-------------------------------------------------------------------------------------
-void ClientObject::onCreateAccountResult(Mercury::Channel * pChannel, MemoryStream& s)
+void ClientObject::onCreateAccountResult(Network::Channel * pChannel, MemoryStream& s)
 {
 	SERVER_ERROR_CODE retcode;
 
@@ -378,7 +378,7 @@ void ClientObject::onCreateAccountResult(Mercury::Channel * pChannel, MemoryStre
 }
 
 //-------------------------------------------------------------------------------------	
-void ClientObject::onLoginSuccessfully(Mercury::Channel * pChannel, MemoryStream& s)
+void ClientObject::onLoginSuccessfully(Network::Channel * pChannel, MemoryStream& s)
 {
 	std::string accountName;
 
@@ -394,7 +394,7 @@ void ClientObject::onLoginSuccessfully(Mercury::Channel * pChannel, MemoryStream
 }
 
 //-------------------------------------------------------------------------------------	
-void ClientObject::onLoginFailed(Mercury::Channel * pChannel, MemoryStream& s)
+void ClientObject::onLoginFailed(Network::Channel * pChannel, MemoryStream& s)
 {
 	SERVER_ERROR_CODE failedcode;
 

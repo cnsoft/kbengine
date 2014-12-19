@@ -18,26 +18,25 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "orders.hpp"
-#include "billingsystem.hpp"
-#include "billing_tasks.hpp"
-#include "anonymous_channel.hpp"
-#include "billingsystem_interface.hpp"
-#include "network/common.hpp"
-#include "network/tcp_packet.hpp"
-#include "network/udp_packet.hpp"
-#include "network/message_handler.hpp"
-#include "thread/threadpool.hpp"
-#include "server/componentbridge.hpp"
-#include "server/components.hpp"
+#include "orders.h"
+#include "billingsystem.h"
+#include "billing_tasks.h"
+#include "anonymous_channel.h"
+#include "billingsystem_interface.h"
+#include "network/common.h"
+#include "network/tcp_packet.h"
+#include "network/udp_packet.h"
+#include "network/message_handler.h"
+#include "thread/threadpool.h"
+#include "server/components.h"
 
 
-#include "baseapp/baseapp_interface.hpp"
-#include "cellapp/cellapp_interface.hpp"
-#include "baseappmgr/baseappmgr_interface.hpp"
-#include "cellappmgr/cellappmgr_interface.hpp"
-#include "loginapp/loginapp_interface.hpp"
-#include "dbmgr/dbmgr_interface.hpp"
+#include "baseapp/baseapp_interface.h"
+#include "cellapp/cellapp_interface.h"
+#include "baseappmgr/baseappmgr_interface.h"
+#include "cellappmgr/cellappmgr_interface.h"
+#include "loginapp/loginapp_interface.h"
+#include "dbmgr/dbmgr_interface.h"
 
 namespace KBEngine{
 	
@@ -45,8 +44,8 @@ ServerConfig g_serverConfig;
 KBE_SINGLETON_INIT(BillingSystem);
 
 //-------------------------------------------------------------------------------------
-BillingSystem::BillingSystem(Mercury::EventDispatcher& dispatcher, 
-			 Mercury::NetworkInterface& ninterface, 
+BillingSystem::BillingSystem(Network::EventDispatcher& dispatcher, 
+			 Network::NetworkInterface& ninterface, 
 			 COMPONENT_TYPE componentType,
 			 COMPONENT_ID componentID):
 	ServerApp(dispatcher, ninterface, componentType, componentID),
@@ -176,8 +175,8 @@ bool BillingSystem::initializeBegin()
 bool BillingSystem::inInitialize()
 {
 	// 广播自己的地址给网上上的所有kbemachine
-	Componentbridge::getSingleton().getComponents().pHandler(this);
-	this->mainDispatcher().addFrequentTask(&Componentbridge::getSingleton());
+	Components::getSingleton().pHandler(this);
+	this->mainDispatcher().addFrequentTask(&Components::getSingleton());
 	return true;
 }
 
@@ -208,7 +207,7 @@ void BillingSystem::finalise()
 }
 
 //-------------------------------------------------------------------------------------
-void BillingSystem::reqCreateAccount(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void BillingSystem::reqCreateAccount(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	std::string registerName, accountName, password, datas;
 	COMPONENT_ID cid;
@@ -236,7 +235,7 @@ void BillingSystem::reqCreateAccount(Mercury::Channel* pChannel, KBEngine::Memor
 	pinfo->getDatas = "";
 	pinfo->password = password;
 	pinfo->postDatas = datas;
-	pinfo->success = false;
+	pinfo->retcode = SERVER_ERR_OP_FAILED;
 	pinfo->baseappID = cid;
 	pinfo->dbmgrID = pChannel->componentID();
 	pinfo->address = pChannel->addr();
@@ -249,7 +248,7 @@ void BillingSystem::reqCreateAccount(Mercury::Channel* pChannel, KBEngine::Memor
 }
 
 //-------------------------------------------------------------------------------------
-void BillingSystem::onAccountLogin(Mercury::Channel* pChannel, KBEngine::MemoryStream& s) 
+void BillingSystem::onAccountLogin(Network::Channel* pChannel, KBEngine::MemoryStream& s) 
 {
 	std::string loginName, accountName, password, datas;
 	COMPONENT_ID cid;
@@ -272,7 +271,7 @@ void BillingSystem::onAccountLogin(Mercury::Channel* pChannel, KBEngine::MemoryS
 	pinfo->getDatas = "";
 	pinfo->password = password;
 	pinfo->postDatas = datas;
-	pinfo->success = false;
+	pinfo->retcode = SERVER_ERR_OP_FAILED;
 	pinfo->baseappID = cid;
 	pinfo->dbmgrID = pChannel->componentID();
 	pinfo->address = pChannel->addr();
@@ -285,7 +284,7 @@ void BillingSystem::onAccountLogin(Mercury::Channel* pChannel, KBEngine::MemoryS
 }
 
 //-------------------------------------------------------------------------------------
-void BillingSystem::charge(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void BillingSystem::charge(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	OrdersCharge* pOrdersCharge = new OrdersCharge();
 
@@ -324,7 +323,7 @@ void BillingSystem::charge(Mercury::Channel* pChannel, KBEngine::MemoryStream& s
 }
 
 //-------------------------------------------------------------------------------------
-void BillingSystem::eraseClientReq(Mercury::Channel* pChannel, std::string& logkey)
+void BillingSystem::eraseClientReq(Network::Channel* pChannel, std::string& logkey)
 {
 	lockthread();
 

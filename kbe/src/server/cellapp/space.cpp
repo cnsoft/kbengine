@@ -18,20 +18,20 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "cellapp.hpp"
-#include "space.hpp"	
-#include "entity.hpp"
-#include "witness.hpp"	
-#include "navigation/navigation.hpp"
-#include "loadnavmesh_threadtasks.hpp"
-#include "entitydef/entities.hpp"
-#include "client_lib/client_interface.hpp"
+#include "cellapp.h"
+#include "space.h"	
+#include "entity.h"
+#include "witness.h"	
+#include "navigation/navigation.h"
+#include "loadnavmesh_threadtasks.h"
+#include "entitydef/entities.h"
+#include "client_lib/client_interface.h"
 
-#include "../../server/baseappmgr/baseappmgr_interface.hpp"
-#include "../../server/cellappmgr/cellappmgr_interface.hpp"
-#include "../../server/baseapp/baseapp_interface.hpp"
-#include "../../server/cellapp/cellapp_interface.hpp"
-#include "../../server/dbmgr/dbmgr_interface.hpp"
+#include "../../server/baseappmgr/baseappmgr_interface.h"
+#include "../../server/cellappmgr/cellappmgr_interface.h"
+#include "../../server/baseapp/baseapp_interface.h"
+#include "../../server/cellapp/cellapp_interface.h"
+#include "../../server/dbmgr/dbmgr_interface.h"
 
 namespace KBEngine{	
 
@@ -270,6 +270,9 @@ void Space::removeEntity(Entity* pEntity)
 //-------------------------------------------------------------------------------------
 void Space::_onEnterWorld(Entity* pEntity)
 {
+	if(!pEntity->isReal() || !pEntity->scriptModule()->hasClient())
+		return;
+
 	if(pEntity->hasWitness())
 	{
 		pEntity->pWitness()->onEnterSpace(this);
@@ -300,7 +303,7 @@ void Space::onEntityAttachWitness(Entity* pEntity)
 //-------------------------------------------------------------------------------------
 void Space::onLeaveWorld(Entity* pEntity)
 {
-	if(!pEntity->scriptModule()->hasClient())
+	if(!pEntity->isReal() || !pEntity->scriptModule()->hasClient())
 		return;
 	
 	// 向其他人客户端广播自己的离开
@@ -450,7 +453,7 @@ void Space::onSpaceDataChanged(const std::string& key, const std::string& value,
 		if(pEntity == NULL || pEntity->isDestroyed() || !pEntity->hasWitness())
 			continue;
 
-		Mercury::Bundle* pForwardBundle = Mercury::Bundle::ObjPool().createObject();
+		Network::Bundle* pForwardBundle = Network::Bundle::ObjPool().createObject();
 
 		if(!isdel)
 		{
@@ -466,15 +469,15 @@ void Space::onSpaceDataChanged(const std::string& key, const std::string& value,
 			(*pForwardBundle) << key;
 		}
 
-		Mercury::Bundle* pSendBundle = Mercury::Bundle::ObjPool().createObject();
-		MERCURY_ENTITY_MESSAGE_FORWARD_CLIENT(pEntity->id(), (*pSendBundle), (*pForwardBundle));
+		Network::Bundle* pSendBundle = Network::Bundle::ObjPool().createObject();
+		NETWORK_ENTITY_MESSAGE_FORWARD_CLIENT(pEntity->id(), (*pSendBundle), (*pForwardBundle));
 
 		if(!isdel)
 			pEntity->pWitness()->sendToClient(ClientInterface::setSpaceData, pSendBundle);
 		else
 			pEntity->pWitness()->sendToClient(ClientInterface::delSpaceData, pSendBundle);
 
-		Mercury::Bundle::ObjPool().reclaimObject(pForwardBundle);
+		Network::Bundle::ObjPool().reclaimObject(pForwardBundle);
 	}
 }
 
@@ -499,7 +502,7 @@ void Space::_addSpaceDatasToEntityClient(const Entity* pEntity)
 		return;
 	}
 
-	Mercury::Bundle* pForwardBundle = Mercury::Bundle::ObjPool().createObject();
+	Network::Bundle* pForwardBundle = Network::Bundle::ObjPool().createObject();
 
 	pForwardBundle->newMessage(ClientInterface::initSpaceData);
 	(*pForwardBundle) << this->id();
@@ -511,11 +514,11 @@ void Space::_addSpaceDatasToEntityClient(const Entity* pEntity)
 		(*pForwardBundle) << iter->second;
 	}
 
-	Mercury::Bundle* pSendBundle = Mercury::Bundle::ObjPool().createObject();
-	MERCURY_ENTITY_MESSAGE_FORWARD_CLIENT(pEntity->id(), (*pSendBundle), (*pForwardBundle));
+	Network::Bundle* pSendBundle = Network::Bundle::ObjPool().createObject();
+	NETWORK_ENTITY_MESSAGE_FORWARD_CLIENT(pEntity->id(), (*pSendBundle), (*pForwardBundle));
 
 	pEntity->pWitness()->sendToClient(ClientInterface::initSpaceData, pSendBundle);
-	Mercury::Bundle::ObjPool().reclaimObject(pForwardBundle);
+	Network::Bundle::ObjPool().reclaimObject(pForwardBundle);
 }
 
 //-------------------------------------------------------------------------------------

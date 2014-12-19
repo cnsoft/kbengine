@@ -18,11 +18,11 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "cellapp.hpp"
-#include "ghost_manager.hpp"
-#include "entitydef/scriptdef_module.hpp"
-#include "network/bundle.hpp"
-#include "network/channel.hpp"
+#include "cellapp.h"
+#include "ghost_manager.h"
+#include "entitydef/scriptdef_module.h"
+#include "network/bundle.h"
+#include "network/channel.h"
 
 namespace KBEngine{	
 
@@ -39,12 +39,12 @@ checkTime_(0)
 //-------------------------------------------------------------------------------------
 GhostManager::~GhostManager()
 {
-	std::map<COMPONENT_ID, std::vector< Mercury::Bundle* > >::iterator iter = messages_.begin();
+	std::map<COMPONENT_ID, std::vector< Network::Bundle* > >::iterator iter = messages_.begin();
 	for(; iter != messages_.end(); iter++)
 	{
-		std::vector< Mercury::Bundle* >::iterator iter1 = iter->second.begin();
+		std::vector< Network::Bundle* >::iterator iter1 = iter->second.begin();
 		for(; iter1 != iter->second.end(); iter1++)
-			Mercury::Bundle::ObjPool().reclaimObject((*iter1));
+			Network::Bundle::ObjPool().reclaimObject((*iter1));
 	}
 
 	cancel();
@@ -75,14 +75,14 @@ void GhostManager::start()
 }
 
 //-------------------------------------------------------------------------------------
-void GhostManager::pushMessage(COMPONENT_ID componentID, Mercury::Bundle* pBundle)
+void GhostManager::pushMessage(COMPONENT_ID componentID, Network::Bundle* pBundle)
 {
 	messages_[componentID].push_back(pBundle);
 	start();
 }
 
 //-------------------------------------------------------------------------------------
-void GhostManager::pushRouteMessage(ENTITY_ID entityID, COMPONENT_ID componentID, Mercury::Bundle* pBundle)
+void GhostManager::pushRouteMessage(ENTITY_ID entityID, COMPONENT_ID componentID, Network::Bundle* pBundle)
 {
 	pushMessage(componentID, pBundle);
 	addRoute(entityID, componentID);
@@ -129,18 +129,18 @@ void GhostManager::checkRoute()
 //-------------------------------------------------------------------------------------
 void GhostManager::syncMessages()
 {
-	std::map<COMPONENT_ID, std::vector< Mercury::Bundle* > >::iterator iter = messages_.begin();
+	std::map<COMPONENT_ID, std::vector< Network::Bundle* > >::iterator iter = messages_.begin();
 	for(; iter != messages_.end(); iter++)
 	{
 		Components::ComponentInfos* cinfos = Components::getSingleton().findComponent(iter->first);
-		std::vector< Mercury::Bundle* >::iterator iter1 = iter->second.begin();
+		std::vector< Network::Bundle* >::iterator iter1 = iter->second.begin();
 
 		if(cinfos == NULL || cinfos->pChannel == NULL)
 		{
 			ERROR_MSG(fmt::format("GhostManager::syncMessages: not found cellapp({})!\n", iter->first));
 			
 			for(; iter1 != iter->second.end(); iter1++)
-				Mercury::Bundle::ObjPool().reclaimObject((*iter1));
+				Network::Bundle::ObjPool().reclaimObject((*iter1));
 
 			iter->second.clear();
 			continue;
@@ -151,7 +151,7 @@ void GhostManager::syncMessages()
 			(*iter1)->send(Cellapp::getSingleton().networkInterface(), cinfos->pChannel);
 
 			// 将消息同步到ghost
-			Mercury::Bundle::ObjPool().reclaimObject((*iter1));
+			Network::Bundle::ObjPool().reclaimObject((*iter1));
 		}
 			
 		iter->second.clear();

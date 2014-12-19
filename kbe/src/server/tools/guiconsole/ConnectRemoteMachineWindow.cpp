@@ -5,9 +5,9 @@
 #include "guiconsole.h"
 #include "guiconsoleDlg.h"
 #include "ConnectRemoteMachineWindow.h"
-#include "machine/machine_interface.hpp"
-#include "server/components.hpp"
-#include "helper/console_helper.hpp"
+#include "machine/machine_interface.h"
+#include "server/components.h"
+#include "helper/console_helper.h"
 
 // CConnectRemoteMachineWindow dialog
 
@@ -96,11 +96,11 @@ void CConnectRemoteMachineWindow::OnBnClickedOk()
 	command += csport;
 	free(csport);
 
-	KBEngine::Mercury::EndPoint* endpoint = new KBEngine::Mercury::EndPoint();
+	KBEngine::Network::EndPoint* endpoint = new KBEngine::Network::EndPoint();
 
 	KBEngine::u_int32_t address;
 	endpoint->convertAddress(strip, address);
-	KBEngine::Mercury::Address addr(address, htons(port));
+	KBEngine::Network::Address addr(address, htons(port));
 
 	if(addr.ip == 0)
 	{
@@ -141,24 +141,24 @@ void CConnectRemoteMachineWindow::OnBnClickedOk()
 			break;
 		}
 
-		KBEngine::Mercury::Bundle bhandler;
+		KBEngine::Network::Bundle bhandler;
 		bhandler.newMessage(KBEngine::MachineInterface::onFindInterfaceAddr);
 
 		KBEngine::MachineInterface::onFindInterfaceAddrArgs7::staticAddToBundle(bhandler, KBEngine::getUserUID(), KBEngine::getUsername(), 
-			CONSOLE_TYPE, g_componentID, findComponentType, 0, 0);
+			CONSOLE_TYPE, g_componentID, (COMPONENT_TYPE)findComponentType, 0, 0);
 
 		bhandler.send(*endpoint);
 
-		KBEngine::Mercury::TCPPacket packet;
+		KBEngine::Network::TCPPacket packet;
 		packet.resize(65535);
 
 		endpoint->setnonblocking(true);
 		KBEngine::sleep(300);
 		packet.wpos(endpoint->recv(packet.data(), 65535));
 
-		while(packet.opsize() > 0)
+		while(packet.length() > 0)
 		{
-			MachineInterface::onBroadcastInterfaceArgs22 args;
+			MachineInterface::onBroadcastInterfaceArgs24 args;
 			
 			try
 			{

@@ -18,33 +18,32 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "dbmgr.hpp"
-#include "sync_app_datas_handler.hpp"
-#include "entitydef/scriptdef_module.hpp"
-#include "entitydef/entity_macro.hpp"
-#include "network/fixed_messages.hpp"
-#include "math/math.hpp"
-#include "network/bundle.hpp"
-#include "network/channel.hpp"
-#include "server/componentbridge.hpp"
-#include "server/components.hpp"
+#include "dbmgr.h"
+#include "sync_app_datas_handler.h"
+#include "entitydef/scriptdef_module.h"
+#include "entitydef/entity_macro.h"
+#include "network/fixed_messages.h"
+#include "math/math.h"
+#include "network/bundle.h"
+#include "network/channel.h"
+#include "server/components.h"
 
-#include "baseapp/baseapp_interface.hpp"
-#include "cellapp/cellapp_interface.hpp"
-#include "baseappmgr/baseappmgr_interface.hpp"
-#include "cellappmgr/cellappmgr_interface.hpp"
-#include "loginapp/loginapp_interface.hpp"
+#include "baseapp/baseapp_interface.h"
+#include "cellapp/cellapp_interface.h"
+#include "baseappmgr/baseappmgr_interface.h"
+#include "cellappmgr/cellappmgr_interface.h"
+#include "loginapp/loginapp_interface.h"
 
 namespace KBEngine{	
 
 //-------------------------------------------------------------------------------------
-SyncAppDatasHandler::SyncAppDatasHandler(Mercury::NetworkInterface & networkInterface):
+SyncAppDatasHandler::SyncAppDatasHandler(Network::NetworkInterface & networkInterface):
 Task(),
 networkInterface_(networkInterface),
 lastRegAppTime_(0),
 apps_()
 {
-	networkInterface.mainDispatcher().addFrequentTask(this);
+	networkInterface.dispatcher().addFrequentTask(this);
 }
 
 //-------------------------------------------------------------------------------------
@@ -57,7 +56,7 @@ SyncAppDatasHandler::~SyncAppDatasHandler()
 }
 
 //-------------------------------------------------------------------------------------
-void SyncAppDatasHandler::pushApp(COMPONENT_ID cid, int32 startGroupOrder, int32 startGlobalOrder)
+void SyncAppDatasHandler::pushApp(COMPONENT_ID cid, COMPONENT_ORDER startGroupOrder, COMPONENT_ORDER startGlobalOrder)
 {
 	lastRegAppTime_ = timestamp();
 	std::vector<ComponentInitInfo>::iterator iter = apps_.begin();
@@ -89,7 +88,7 @@ bool SyncAppDatasHandler::process()
 	for(; iter != apps_.end(); iter++)
 	{
 		ComponentInitInfo cInitInfo = (*iter);
-		Components::ComponentInfos* cinfos = Componentbridge::getComponents().findComponent(cInitInfo.cid);
+		Components::ComponentInfos* cinfos = Components::getSingleton().findComponent(cInitInfo.cid);
 
 		if(cinfos == NULL)
 			continue;
@@ -120,7 +119,7 @@ bool SyncAppDatasHandler::process()
 	for(; iter != apps_.end(); iter++)
 	{
 		ComponentInitInfo cInitInfo = (*iter);
-		Components::ComponentInfos* cinfos = Componentbridge::getComponents().findComponent(cInitInfo.cid);
+		Components::ComponentInfos* cinfos = Components::getSingleton().findComponent(cInitInfo.cid);
 
 		if(cinfos == NULL)
 			continue;
@@ -131,7 +130,7 @@ bool SyncAppDatasHandler::process()
 			tcomponentType == CELLAPP_TYPE || 
 			tcomponentType == LOGINAPP_TYPE)
 		{
-			Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+			Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 			
 			switch(tcomponentType)
 			{
@@ -166,7 +165,7 @@ bool SyncAppDatasHandler::process()
 			}
 
 			(*pBundle).send(networkInterface_, cinfos->pChannel);
-			Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+			Network::Bundle::ObjPool().reclaimObject(pBundle);
 		}
 	}
 

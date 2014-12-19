@@ -19,19 +19,19 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "telnet_server.hpp"
-#include "telnet_handler.hpp"
-#include "network/bundle.hpp"
-#include "network/endpoint.hpp"
+#include "telnet_server.h"
+#include "telnet_handler.h"
+#include "network/bundle.h"
+#include "network/endpoint.h"
 
 #ifndef CODE_INLINE
-#include "telnet_server.ipp"
+#include "telnet_server.inl"
 #endif
 
 namespace KBEngine { 
 
 //-------------------------------------------------------------------------------------
-TelnetServer::TelnetServer(Mercury::EventDispatcher* pDispatcher, Mercury::NetworkInterface* networkInterface):
+TelnetServer::TelnetServer(Network::EventDispatcher* pDispatcher, Network::NetworkInterface* networkInterface):
 handlers_(),
 listener_(),
 pDispatcher_(pDispatcher),
@@ -164,7 +164,7 @@ int	TelnetServer::handleInputNotification(int fd)
 
 	while(tickcount ++ < 1024)
 	{
-		Mercury::EndPoint* pNewEndPoint = listener_.accept();
+		Network::EndPoint* pNewEndPoint = listener_.accept();
 		if(pNewEndPoint == NULL){
 
 			if(tickcount == 1)

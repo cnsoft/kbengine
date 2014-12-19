@@ -19,24 +19,24 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "pyprofile_handler.hpp"
-#include "network/network_interface.hpp"
-#include "network/event_dispatcher.hpp"
-#include "network/address.hpp"
-#include "network/mercurystats.hpp"
-#include "network/bundle.hpp"
-#include "network/message_handler.hpp"
-#include "pyscript/pyprofile.hpp"
-#include "cstdkbe/memorystream.hpp"
-#include "helper/console_helper.hpp"
-#include "helper/profile.hpp"
-#include "server/serverconfig.hpp"
+#include "pyprofile_handler.h"
+#include "network/network_interface.h"
+#include "network/event_dispatcher.h"
+#include "network/address.h"
+#include "network/network_stats.h"
+#include "network/bundle.h"
+#include "network/message_handler.h"
+#include "pyscript/pyprofile.h"
+#include "common/memorystream.h"
+#include "helper/console_helper.h"
+#include "helper/profile.h"
+#include "server/serverconfig.h"
 
 namespace KBEngine { 
 
 //-------------------------------------------------------------------------------------
-PyProfileHandler::PyProfileHandler(Mercury::NetworkInterface & networkInterface, uint32 timinglen, 
-							   std::string name, const Mercury::Address& addr) :
+PyProfileHandler::PyProfileHandler(Network::NetworkInterface & networkInterface, uint32 timinglen, 
+							   std::string name, const Network::Address& addr) :
 ProfileHandler(networkInterface, timinglen, name, addr)
 {
 	script::PyProfile::start(name_);
@@ -70,7 +70,7 @@ void PyProfileHandler::timeout()
 //-------------------------------------------------------------------------------------
 void PyProfileHandler::sendStream(MemoryStream* s)
 {
-	Mercury::Channel* pChannel = networkInterface_.findChannel(addr_);
+	Network::Channel* pChannel = networkInterface_.findChannel(addr_);
 	if(pChannel == NULL)
 	{
 		WARNING_MSG(fmt::format("PyProfileHandler::sendStream: not found {} addr({})\n",
@@ -78,7 +78,7 @@ void PyProfileHandler::sendStream(MemoryStream* s)
 		return;
 	}
 
-	Mercury::Bundle::SmartPoolObjectPtr bundle = Mercury::Bundle::createSmartPoolObj();
+	Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
 
 	ConsoleInterface::ConsoleProfileHandler msgHandler;
 	(*(*bundle)).newMessage(msgHandler);

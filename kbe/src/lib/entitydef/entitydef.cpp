@@ -19,17 +19,17 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "entitydef.hpp"
-#include "scriptdef_module.hpp"
-#include "datatypes.hpp"
-#include "common.hpp"
-#include "blob.hpp"
-#include "resmgr/resmgr.hpp"
-#include "cstdkbe/smartpointer.hpp"
-#include "entitydef/entity_mailbox.hpp"
+#include "entitydef.h"
+#include "scriptdef_module.h"
+#include "datatypes.h"
+#include "common.h"
+#include "blob.h"
+#include "resmgr/resmgr.h"
+#include "common/smartpointer.h"
+#include "entitydef/entity_mailbox.h"
 
 #ifndef CODE_INLINE
-#include "entitydef.ipp"
+#include "entitydef.inl"
 #endif
 
 namespace KBEngine{
@@ -71,8 +71,8 @@ EntityDef::~EntityDef()
 //-------------------------------------------------------------------------------------
 bool EntityDef::finalise(bool isReload)
 {
-	PropertyDescription::propertyDescriptionCount_ = 0;
-	MethodDescription::methodDescriptionCount_ = 0;
+	PropertyDescription::resetDescriptionCount();
+	MethodDescription::resetDescriptionCount();
 
 	EntityDef::__md5.clear();
 	g_methodUtypeAuto = 1;
@@ -131,7 +131,7 @@ void EntityDef::reload(bool fullReload)
 	}
 	else
 	{
-		loadAllScriptModule(EntityDef::__entitiesPath, EntityDef::__scriptBaseTypes);
+		loadAllScriptModules(EntityDef::__entitiesPath, EntityDef::__scriptBaseTypes);
 	}
 
 	EntityDef::_isInit = true;
@@ -144,7 +144,7 @@ bool EntityDef::initialize(std::vector<PyTypeObject*>& scriptBaseTypes,
 	__loadComponentType = loadComponentType;
 	__scriptBaseTypes = scriptBaseTypes;
 
-	__entitiesPath = Resmgr::getSingleton().getPyUserResPath() + "scripts/";
+	__entitiesPath = Resmgr::getSingleton().getPyUserScriptsPath();
 
 	g_entityFlagMapping["CELL_PUBLIC"]							= ED_FLAG_CELL_PUBLIC;
 	g_entityFlagMapping["CELL_PRIVATE"]							= ED_FLAG_CELL_PRIVATE;
@@ -160,7 +160,7 @@ bool EntityDef::initialize(std::vector<PyTypeObject*>& scriptBaseTypes,
 	ENTITY_SCRIPT_UID utype = 1;
 	
 	// 初始化数据类别
-	// demo/res/scripts/entity_defs/alias.xml
+	// demo/scripts/entity_defs/alias.xml
 	if(!DataTypes::initialize(defFilePath + "alias.xml"))
 		return false;
 
@@ -179,8 +179,7 @@ bool EntityDef::initialize(std::vector<PyTypeObject*>& scriptBaseTypes,
 	{
 		std::string moduleName = xml.get()->getKey(node);
 		__scriptTypeMappingUType[moduleName] = utype;
-		ScriptDefModule* scriptModule = new ScriptDefModule(moduleName);
-		scriptModule->setUType(utype++);
+		ScriptDefModule* scriptModule = new ScriptDefModule(moduleName, utype++);
 		EntityDef::__scriptModules.push_back(scriptModule);
 
 		std::string deffile = defFilePath + moduleName + ".def";
@@ -208,16 +207,17 @@ bool EntityDef::initialize(std::vector<PyTypeObject*>& scriptBaseTypes,
 
 			return false;
 		}
-		
+
 		scriptModule->onLoaded();
 	}
 	XML_FOR_END(node);
 
 	EntityDef::md5().final();
+
 	if(loadComponentType == DBMGR_TYPE)
 		return true;
 
-	return loadAllScriptModule(__entitiesPath, scriptBaseTypes) && initializeWatcher();
+	return loadAllScriptModules(__entitiesPath, scriptBaseTypes) && initializeWatcher();
 }
 
 //-------------------------------------------------------------------------------------
@@ -227,7 +227,7 @@ bool EntityDef::loadDefInfo(const std::string& defFilePath,
 							TiXmlNode* defNode, 
 							ScriptDefModule* scriptModule)
 {
-	if(!loadAllDefDescription(moduleName, defxml, defNode, scriptModule))
+	if(!loadAllDefDescriptions(moduleName, defxml, defNode, scriptModule))
 	{
 		ERROR_MSG(fmt::format("EntityDef::loadDefInfo: failed to loadAllDefDescription(), entity:{}\n",
 			moduleName.c_str()));
@@ -431,7 +431,7 @@ bool EntityDef::loadInterfaces(const std::string& defFilePath,
 			return false;
 
 		TiXmlNode* interfaceRootNode = interfaceXml.get()->getRootNode();
-		if(!loadAllDefDescription(moduleName, interfaceXml.get(), interfaceRootNode, scriptModule))
+		if(!loadAllDefDescriptions(moduleName, interfaceXml.get(), interfaceRootNode, scriptModule))
 		{
 			ERROR_MSG(fmt::format("EntityDef::initialize: interface[{}] is error!\n", 
 				interfaceName.c_str()));
@@ -491,11 +491,12 @@ bool EntityDef::loadParentClass(const std::string& defFilePath,
 
 		return false;
 	}
+
 	return true;
 }
 
 //-------------------------------------------------------------------------------------
-bool EntityDef::loadAllDefDescription(const std::string& moduleName, 
+bool EntityDef::loadAllDefDescriptions(const std::string& moduleName, 
 									  XmlPlus* defxml, 
 									  TiXmlNode* defNode, 
 									  ScriptDefModule* scriptModule)
@@ -551,8 +552,9 @@ bool EntityDef::loadDefPropertys(const std::string& moduleName,
 			int32						hasClientFlags = 0;
 			DataType*					dataType = NULL;
 			bool						isPersistent = false;
-			bool						isIdentifier = false;													// 是否是一个索引键
-			uint32						databaseLength = 0;														// 这个属性在数据库中的长度
+			bool						isIdentifier = false;		// 是否是一个索引键
+			uint32						databaseLength = 0;			// 这个属性在数据库中的长度
+			std::string					indexType;
 			DETAIL_TYPE					detailLevel = DETAIL_LEVEL_FAR;
 			std::string					detailLevelStr = "";
 			std::string					strType;
@@ -567,7 +569,7 @@ bool EntityDef::loadDefPropertys(const std::string& moduleName,
 			if(flagsNode)
 			{
 				strFlags = xml->getValStr(flagsNode);
-				std::transform(strFlags.begin(), strFlags.end(), strFlags.begin(), toupper);					// 转换为大写
+				std::transform(strFlags.begin(), strFlags.end(), strFlags.begin(), toupper);
 
 				ENTITYFLAGMAP::iterator iter = g_entityFlagMapping.find(strFlags.c_str());
 				if(iter == g_entityFlagMapping.end())
@@ -606,7 +608,7 @@ bool EntityDef::loadDefPropertys(const std::string& moduleName,
 				strisPersistent = xml->getValStr(persistentNode);
 
 				std::transform(strisPersistent.begin(), strisPersistent.end(), 
-					strisPersistent.begin(), tolower);				// 转换为小写
+					strisPersistent.begin(), tolower);
 
 				if(strisPersistent == "true")
 					isPersistent = true;
@@ -629,21 +631,31 @@ bool EntityDef::loadDefPropertys(const std::string& moduleName,
 					dataType = DataTypes::getDataType(strType);
 			}
 
+			TiXmlNode* indexTypeNode = xml->enterNode(defPropertyNode->FirstChild(), "Index");
+			if(indexTypeNode)
+			{
+				indexType = xml->getValStr(indexTypeNode);
+
+				std::transform(indexType.begin(), indexType.end(), 
+					indexType.begin(), toupper);
+			}
+			
+
 			TiXmlNode* identifierNode = xml->enterNode(defPropertyNode->FirstChild(), "Identifier");
 			if(identifierNode)
 			{
 				strIdentifierNode = xml->getValStr(identifierNode);
 				std::transform(strIdentifierNode.begin(), strIdentifierNode.end(), 
-					strIdentifierNode.begin(), tolower);			// 转换为小写
+					strIdentifierNode.begin(), tolower);
 
 				if(strIdentifierNode == "true")
 					isIdentifier = true;
 			}
 
-			//TiXmlNode* databaseLengthNode = xml->enterNode(defPropertyNode->FirstChild(), "Identifier");
-			if(identifierNode)
+			TiXmlNode* databaseLengthNode = xml->enterNode(defPropertyNode->FirstChild(), "DatabaseLength");
+			if(databaseLengthNode)
 			{
-				databaseLength = xml->getValInt(identifierNode);
+				databaseLength = xml->getValInt(databaseLengthNode);
 			}
 
 			TiXmlNode* defaultValNode = 
@@ -697,7 +709,7 @@ bool EntityDef::loadDefPropertys(const std::string& moduleName,
 			// 产生一个属性描述实例
 			PropertyDescription* propertyDescription = PropertyDescription::createDescription(futype, strType, 
 															name, flags, isPersistent, 
-															dataType, isIdentifier, 
+															dataType, isIdentifier, indexType,
 															databaseLength, defaultStr, 
 															detailLevel);
 
@@ -715,7 +727,7 @@ bool EntityDef::loadDefPropertys(const std::string& moduleName,
 			if(hasClientFlags > 0)
 				ret = scriptModule->addPropertyDescription(name.c_str(), 
 						propertyDescription, CLIENT_TYPE);
-			
+
 			if(!ret)
 			{
 				ERROR_MSG(fmt::format("EntityDef::addPropertyDescription({}): {}.\n", 
@@ -724,6 +736,7 @@ bool EntityDef::loadDefPropertys(const std::string& moduleName,
 		}
 		XML_FOR_END(defPropertyNode);
 	}
+
 	return true;
 }
 
@@ -1004,22 +1017,34 @@ bool EntityDef::isLoadScriptModule(ScriptDefModule* scriptModule)
 	switch(__loadComponentType)
 	{
 	case BASEAPP_TYPE:
-		if(!scriptModule->hasBase())
-			return false;
-		break;
+		{
+			if(!scriptModule->hasBase())
+				return false;
+
+			break;
+		}
 	case CELLAPP_TYPE:
-		if(!scriptModule->hasCell())
-			return false;
-		break;
+		{
+			if(!scriptModule->hasCell())
+				return false;
+
+			break;
+		}
 	case CLIENT_TYPE:
 	case BOTS_TYPE:
-		if(!scriptModule->hasClient())
-			return false;
-		break;
+		{
+			if(!scriptModule->hasClient())
+				return false;
+
+			break;
+		}
 	default:
-		if(!scriptModule->hasCell())
-			return false;
-		break;
+		{
+			if(!scriptModule->hasCell())
+				return false;
+
+			break;
+		}
 	};
 
 	return true;
@@ -1097,7 +1122,7 @@ void EntityDef::setScriptModuleHasComponentEntity(ScriptDefModule* scriptModule,
 }
 
 //-------------------------------------------------------------------------------------
-bool EntityDef::loadAllScriptModule(std::string entitiesPath, 
+bool EntityDef::loadAllScriptModules(std::string entitiesPath, 
 									std::vector<PyTypeObject*>& scriptBaseTypes)
 {
 	std::string entitiesFile = entitiesPath + "entities.xml";

@@ -18,16 +18,16 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "controllers.hpp"	
-#include "cellapp.hpp"	
-#include "entity.hpp"	
-#include "helper/profile.hpp"	
-#include "cstdkbe/memorystream.hpp"	
+#include "controllers.h"	
+#include "cellapp.h"	
+#include "entity.h"	
+#include "helper/profile.h"	
+#include "common/memorystream.h"	
 
-#include "proximity_controller.hpp"	
-#include "moveto_point_handler.hpp"	
-#include "moveto_entity_handler.hpp"	
-#include "navigate_handler.hpp"	
+#include "proximity_controller.h"	
+#include "moveto_point_handler.h"	
+#include "moveto_entity_handler.h"	
+#include "navigate_handler.h"	
 
 namespace KBEngine{	
 
@@ -56,7 +56,15 @@ bool Controllers::add(Controller* pController)
 {
 	uint32 id = pController->id();
 	if(id == 0)
+	{
 		id = freeID();
+	}
+	else
+	{
+		// Ë¢ÐÂid¼ÆÊýÆ÷
+		if(lastid_ <= id)
+			lastid_ = id + 1;
+	}
 
 	objects_[id].reset(pController);
 	pController->id(id);
@@ -86,8 +94,7 @@ bool Controllers::remove(uint32 id)
 //-------------------------------------------------------------------------------------
 void Controllers::addToStream(KBEngine::MemoryStream& s)
 {
-	uint32 size = 0;
-	size = objects_.size();
+	uint32 size = objects_.size();
 	s << lastid_ << size;
 
 	CONTROLLERS_MAP::iterator iter = objects_.begin();
@@ -129,7 +136,9 @@ void Controllers::createFromStream(KBEngine::MemoryStream& s)
 		};
 		
 		pController->type(type);
-		objects_[pController->id()].reset(pController);
+		pController->createFromStream(s);
+
+		add(pController);
 	}
 }
 

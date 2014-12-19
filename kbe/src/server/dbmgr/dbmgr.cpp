@@ -19,28 +19,27 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "dbmgr.hpp"
-#include "dbmgr_interface.hpp"
-#include "dbtasks.hpp"
-#include "billinghandler.hpp"
-#include "sync_app_datas_handler.hpp"
-#include "db_mysql/kbe_table_mysql.hpp"
-#include "network/common.hpp"
-#include "network/tcp_packet.hpp"
-#include "network/udp_packet.hpp"
-#include "network/message_handler.hpp"
-#include "thread/threadpool.hpp"
-#include "server/componentbridge.hpp"
-#include "server/components.hpp"
-#include "dbmgr_lib/db_interface.hpp"
-#include "db_mysql/db_interface_mysql.hpp"
-#include "entitydef/scriptdef_module.hpp"
+#include "dbmgr.h"
+#include "dbmgr_interface.h"
+#include "dbtasks.h"
+#include "billinghandler.h"
+#include "sync_app_datas_handler.h"
+#include "db_mysql/kbe_table_mysql.h"
+#include "network/common.h"
+#include "network/tcp_packet.h"
+#include "network/udp_packet.h"
+#include "network/message_handler.h"
+#include "thread/threadpool.h"
+#include "server/components.h"
+#include "db_interface/db_interface.h"
+#include "db_mysql/db_interface_mysql.h"
+#include "entitydef/scriptdef_module.h"
 
-#include "baseapp/baseapp_interface.hpp"
-#include "cellapp/cellapp_interface.hpp"
-#include "baseappmgr/baseappmgr_interface.hpp"
-#include "cellappmgr/cellappmgr_interface.hpp"
-#include "loginapp/loginapp_interface.hpp"
+#include "baseapp/baseapp_interface.h"
+#include "cellapp/cellapp_interface.h"
+#include "baseappmgr/baseappmgr_interface.h"
+#include "cellappmgr/cellappmgr_interface.h"
+#include "loginapp/loginapp_interface.h"
 
 namespace KBEngine{
 	
@@ -48,8 +47,8 @@ ServerConfig g_serverConfig;
 KBE_SINGLETON_INIT(Dbmgr);
 
 //-------------------------------------------------------------------------------------
-Dbmgr::Dbmgr(Mercury::EventDispatcher& dispatcher, 
-			 Mercury::NetworkInterface& ninterface, 
+Dbmgr::Dbmgr(Network::EventDispatcher& dispatcher, 
+			 Network::NetworkInterface& ninterface, 
 			 COMPONENT_TYPE componentType,
 			 COMPONENT_ID componentID):
 	ServerApp(dispatcher, ninterface, componentType, componentID),
@@ -85,15 +84,45 @@ Dbmgr::~Dbmgr()
 //-------------------------------------------------------------------------------------
 bool Dbmgr::canShutdown()
 {
-	bool ret = bufferedDBTasks_.size() == 0;
-	
-	if(ret)
+	if(bufferedDBTasks_.size() > 0)
 	{
-		WARNING_MSG(fmt::format("Dbmgr::canShutdown(): tasks={}, threads={}, threadpoolDestroyed={}!\n", 
+		INFO_MSG(fmt::format("Dbmgr::canShutdown(): Wait for the task to complete, tasks={}, threads={}, threadpoolDestroyed={}!\n", 
 			bufferedDBTasks_.size(), DBUtil::pThreadPool()->currentThreadCount(), DBUtil::pThreadPool()->isDestroyed()));
+
+		return false;
 	}
 
-	return ret;
+	Components::COMPONENTS& cellapp_components = Components::getSingleton().getComponents(CELLAPP_TYPE);
+	if(cellapp_components.size() > 0)
+	{
+		std::string s;
+		for(size_t i=0; i<cellapp_components.size(); i++)
+		{
+			s += fmt::format("{}, ", cellapp_components[i].cid);
+		}
+
+		INFO_MSG(fmt::format("Dbmgr::canShutdown(): Waiting for cellapp[{}] destruction!\n", 
+			s));
+
+		return false;
+	}
+
+	Components::COMPONENTS& baseapp_components = Components::getSingleton().getComponents(BASEAPP_TYPE);
+	if(baseapp_components.size() > 0)
+	{
+		std::string s;
+		for(size_t i=0; i<baseapp_components.size(); i++)
+		{
+			s += fmt::format("{}, ", baseapp_components[i].cid);
+		}
+
+		INFO_MSG(fmt::format("Dbmgr::canShutdown(): Waiting for baseapp[{}] destruction!\n", 
+			s));
+
+		return false;
+	}
+
+	return true;
 }
 
 //-------------------------------------------------------------------------------------
@@ -164,7 +193,7 @@ bool Dbmgr::initializeBegin()
 bool Dbmgr::inInitialize()
 {
 	// 初始化所有扩展模块
-	// demo/res/scripts/
+	// demo/scripts/
 	std::vector<PyTypeObject*>	scriptBaseTypes;
 	if(!EntityDef::initialize(scriptBaseTypes, componentType_)){
 		return false;
@@ -180,7 +209,7 @@ bool Dbmgr::initializeEnd()
 	loopCheckTimerHandle_ = this->mainDispatcher().addTimer(1000000, this,
 							reinterpret_cast<void *>(TIMEOUT_CHECK_STATUS));
 
-	mainProcessTimer_ = this->mainDispatcher().addTimer(1000000 / g_kbeSrvConfig.gameUpdateHertz(), this,
+	mainProcessTimer_ = this->mainDispatcher().addTimer(1000000 / 50, this,
 							reinterpret_cast<void *>(TIMEOUT_TICK));
 
 	// 添加globalData, baseAppData, cellAppData支持
@@ -229,26 +258,29 @@ bool Dbmgr::initBillingHandler()
 //-------------------------------------------------------------------------------------		
 bool Dbmgr::initDB()
 {
+	ScriptDefModule* pModule = EntityDef::findScriptModule(DBUtil::accountScriptName());
+	if(pModule == NULL)
+	{
+		ERROR_MSG(fmt::format("Dbmgr::initDB(): not found account script[{}]!\n", 
+			DBUtil::accountScriptName()));
+
+		return false;
+	}
+
 	if(!DBUtil::initialize())
 	{
-		ERROR_MSG("Dbmgr::initDB: can't initialize dbinterface!\n");
+		ERROR_MSG("Dbmgr::initDB(): can't initialize dbinterface!\n");
 		return false;
 	}
 
 	DBInterface* pDBInterface = DBUtil::createInterface();
 	if(pDBInterface == NULL)
 	{
-		ERROR_MSG("Dbmgr::initDB: can't create dbinterface!\n");
+		ERROR_MSG("Dbmgr::initDB(): can't create dbinterface!\n");
 		return false;
 	}
 
 	bool ret = DBUtil::initInterface(pDBInterface);
-	
-	if(ret)
-	{
-		ret = pDBInterface->checkEnvironment();
-	}
-	
 	pDBInterface->detach();
 	SAFE_RELEASE(pDBInterface);
 
@@ -270,13 +302,13 @@ void Dbmgr::finalise()
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::onReqAllocEntityID(Mercury::Channel* pChannel, int8 componentType, COMPONENT_ID componentID)
+void Dbmgr::onReqAllocEntityID(Network::Channel* pChannel, COMPONENT_ORDER componentType, COMPONENT_ID componentID)
 {
 	KBEngine::COMPONENT_TYPE ct = static_cast<KBEngine::COMPONENT_TYPE>(componentType);
 
 	// 获取一个id段 并传输给IDClient
 	std::pair<ENTITY_ID, ENTITY_ID> idRange = idServer_.allocRange();
-	Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 
 	if(ct == BASEAPP_TYPE)
 		(*pBundle).newMessage(BaseappInterface::onReqAllocEntityID);
@@ -286,12 +318,12 @@ void Dbmgr::onReqAllocEntityID(Mercury::Channel* pChannel, int8 componentType, C
 	(*pBundle) << idRange.first;
 	(*pBundle) << idRange.second;
 	(*pBundle).send(this->networkInterface(), pChannel);
-	Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+	Network::Bundle::ObjPool().reclaimObject(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::onRegisterNewApp(Mercury::Channel* pChannel, int32 uid, std::string& username, 
-						int8 componentType, uint64 componentID, int8 globalorderID, int8 grouporderID,
+void Dbmgr::onRegisterNewApp(Network::Channel* pChannel, int32 uid, std::string& username, 
+						COMPONENT_TYPE componentType, COMPONENT_ID componentID, COMPONENT_ORDER globalorderID, COMPONENT_ORDER grouporderID,
 						uint32 intaddr, uint16 intport, uint32 extaddr, uint16 extport, std::string& extaddrEx)
 {
 	if(pChannel->isExternal())
@@ -302,8 +334,8 @@ void Dbmgr::onRegisterNewApp(Mercury::Channel* pChannel, int32 uid, std::string&
 
 	KBEngine::COMPONENT_TYPE tcomponentType = (KBEngine::COMPONENT_TYPE)componentType;
 	
-	int32 startGroupOrder = 1;
-	int32 startGlobalOrder = Componentbridge::getComponents().getGlobalOrderLog()[getUserUID()];
+	COMPONENT_ORDER startGroupOrder = 1;
+	COMPONENT_ORDER startGlobalOrder = Components::getSingleton().getGlobalOrderLog()[getUserUID()];
 
 	if(grouporderID > 0)
 		startGroupOrder = grouporderID;
@@ -326,18 +358,18 @@ void Dbmgr::onRegisterNewApp(Mercury::Channel* pChannel, int32 uid, std::string&
 		case BASEAPP_TYPE:
 			{
 				if(grouporderID <= 0)
-					startGroupOrder = Componentbridge::getComponents().getBaseappGroupOrderLog()[getUserUID()];
+					startGroupOrder = Components::getSingleton().getBaseappGroupOrderLog()[getUserUID()];
 			}
 			break;
 		case CELLAPP_TYPE:
 			{
 				if(grouporderID <= 0)
-					startGroupOrder = Componentbridge::getComponents().getCellappGroupOrderLog()[getUserUID()];
+					startGroupOrder = Components::getSingleton().getCellappGroupOrderLog()[getUserUID()];
 			}
 			break;
 		case LOGINAPP_TYPE:
 			if(grouporderID <= 0)
-				startGroupOrder = Componentbridge::getComponents().getLoginappGroupOrderLog()[getUserUID()];
+				startGroupOrder = Components::getSingleton().getLoginappGroupOrderLog()[getUserUID()];
 
 			break;
 		default:
@@ -361,8 +393,8 @@ void Dbmgr::onRegisterNewApp(Mercury::Channel* pChannel, int32 uid, std::string&
 				if((*fiter).cid == componentID)
 					continue;
 
-				Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
-				ENTITTAPP_COMMON_MERCURY_MESSAGE(broadcastCpTypes[idx], (*pBundle), onGetEntityAppFromDbmgr);
+				Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+				ENTITTAPP_COMMON_NETWORK_MESSAGE(broadcastCpTypes[idx], (*pBundle), onGetEntityAppFromDbmgr);
 				
 				if(tcomponentType == BASEAPP_TYPE)
 				{
@@ -379,14 +411,14 @@ void Dbmgr::onRegisterNewApp(Mercury::Channel* pChannel, int32 uid, std::string&
 				
 				KBE_ASSERT((*fiter).pChannel != NULL);
 				(*pBundle).send(networkInterface_, (*fiter).pChannel);
-				Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+				Network::Bundle::ObjPool().reclaimObject(pBundle);
 			}
 		}
 	}
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::onGlobalDataClientLogon(Mercury::Channel* pChannel, COMPONENT_TYPE componentType)
+void Dbmgr::onGlobalDataClientLogon(Network::Channel* pChannel, COMPONENT_TYPE componentType)
 {
 	if(BASEAPP_TYPE == componentType)
 	{
@@ -406,7 +438,7 @@ void Dbmgr::onGlobalDataClientLogon(Mercury::Channel* pChannel, COMPONENT_TYPE c
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::onBroadcastGlobalDataChanged(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Dbmgr::onBroadcastGlobalDataChanged(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	uint8 dataType;
 	std::string key, value;
@@ -452,7 +484,7 @@ void Dbmgr::onBroadcastGlobalDataChanged(Mercury::Channel* pChannel, KBEngine::M
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::reqCreateAccount(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Dbmgr::reqCreateAccount(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	std::string registerName, password, datas;
 	uint8 uatype = 0;
@@ -471,13 +503,13 @@ void Dbmgr::reqCreateAccount(Mercury::Channel* pChannel, KBEngine::MemoryStream&
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::onCreateAccountCBFromBilling(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Dbmgr::onCreateAccountCBFromBilling(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	pBillingAccountHandler_->onCreateAccountCB(s);
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::onAccountLogin(Mercury::Channel* pChannel, KBEngine::MemoryStream& s) 
+void Dbmgr::onAccountLogin(Network::Channel* pChannel, KBEngine::MemoryStream& s) 
 {
 	std::string loginName, password, datas;
 	s >> loginName >> password;
@@ -493,13 +525,13 @@ void Dbmgr::onAccountLogin(Mercury::Channel* pChannel, KBEngine::MemoryStream& s
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::onLoginAccountCBBFromBilling(Mercury::Channel* pChannel, KBEngine::MemoryStream& s) 
+void Dbmgr::onLoginAccountCBBFromBilling(Network::Channel* pChannel, KBEngine::MemoryStream& s) 
 {
 	pBillingAccountHandler_->onLoginAccountCB(s);
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::queryAccount(Mercury::Channel* pChannel, 
+void Dbmgr::queryAccount(Network::Channel* pChannel, 
 						 std::string& accountName, 
 						 std::string& password,
 						 COMPONENT_ID componentID,
@@ -521,7 +553,7 @@ void Dbmgr::queryAccount(Mercury::Channel* pChannel,
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::onAccountOnline(Mercury::Channel* pChannel, 
+void Dbmgr::onAccountOnline(Network::Channel* pChannel, 
 							std::string& accountName, 
 							COMPONENT_ID componentID, 
 							ENTITY_ID entityID)
@@ -531,13 +563,13 @@ void Dbmgr::onAccountOnline(Mercury::Channel* pChannel,
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::onEntityOffline(Mercury::Channel* pChannel, DBID dbid, ENTITY_SCRIPT_UID sid)
+void Dbmgr::onEntityOffline(Network::Channel* pChannel, DBID dbid, ENTITY_SCRIPT_UID sid)
 {
 	bufferedDBTasks_.addTask(new DBTaskEntityOffline(pChannel->addr(), dbid, sid));
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::executeRawDatabaseCommand(Mercury::Channel* pChannel, 
+void Dbmgr::executeRawDatabaseCommand(Network::Channel* pChannel, 
 									  KBEngine::MemoryStream& s)
 {
 	ENTITY_ID entityID = -1;
@@ -548,13 +580,13 @@ void Dbmgr::executeRawDatabaseCommand(Mercury::Channel* pChannel,
 	else
 		bufferedDBTasks_.addTask(new DBTaskExecuteRawDatabaseCommandByEntity(pChannel->addr(), s, entityID));
 
-	s.opfini();
+	s.done();
 
 	numExecuteRawDatabaseCommand_++;
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::writeEntity(Mercury::Channel* pChannel, 
+void Dbmgr::writeEntity(Network::Channel* pChannel, 
 						KBEngine::MemoryStream& s)
 {
 	ENTITY_ID eid;
@@ -564,13 +596,13 @@ void Dbmgr::writeEntity(Mercury::Channel* pChannel,
 	s >> componentID >> eid >> entityDBID;
 
 	bufferedDBTasks_.addTask(new DBTaskWriteEntity(pChannel->addr(), componentID, eid, entityDBID, s));
-	s.opfini();
+	s.done();
 
 	numWrittenEntity_++;
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::removeEntity(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Dbmgr::removeEntity(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	ENTITY_ID eid;
 	DBID entityDBID;
@@ -582,13 +614,13 @@ void Dbmgr::removeEntity(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
 	bufferedDBTasks_.addTask(new DBTaskRemoveEntity(pChannel->addr(), 
 		componentID, eid, entityDBID, s));
 
-	s.opfini();
+	s.done();
 
 	numRemovedEntity_++;
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::deleteBaseByDBID(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Dbmgr::deleteBaseByDBID(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	COMPONENT_ID componentID;
 	ENTITY_SCRIPT_UID sid;
@@ -603,7 +635,22 @@ void Dbmgr::deleteBaseByDBID(Mercury::Channel* pChannel, KBEngine::MemoryStream&
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::queryEntity(Mercury::Channel* pChannel, COMPONENT_ID componentID, int8 queryMode, DBID dbid, 
+void Dbmgr::lookUpBaseByDBID(Network::Channel* pChannel, KBEngine::MemoryStream& s)
+{
+	COMPONENT_ID componentID;
+	ENTITY_SCRIPT_UID sid;
+	CALLBACK_ID callbackID = 0;
+	DBID entityDBID;
+
+	s >> componentID >> entityDBID >> callbackID >> sid;
+	KBE_ASSERT(entityDBID > 0);
+
+	DBUtil::pThreadPool()->addTask(new DBTaskLookUpBaseByDBID(pChannel->addr(), 
+		componentID, entityDBID, callbackID, sid));
+}
+
+//-------------------------------------------------------------------------------------
+void Dbmgr::queryEntity(Network::Channel* pChannel, COMPONENT_ID componentID, int8 queryMode, DBID dbid, 
 	std::string& entityType, CALLBACK_ID callbackID, ENTITY_ID entityID)
 {
 	bufferedDBTasks_.addTask(new DBTaskQueryEntity(pChannel->addr(), queryMode, entityType, 
@@ -613,7 +660,7 @@ void Dbmgr::queryEntity(Mercury::Channel* pChannel, COMPONENT_ID componentID, in
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::syncEntityStreamTemplate(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Dbmgr::syncEntityStreamTemplate(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	KBEAccountTable* pTable = 
 		static_cast<KBEAccountTable*>(EntityTables::getSingleton().findKBETable("kbe_accountinfos"));
@@ -621,50 +668,50 @@ void Dbmgr::syncEntityStreamTemplate(Mercury::Channel* pChannel, KBEngine::Memor
 	KBE_ASSERT(pTable);
 
 	pTable->accountDefMemoryStream(s);
-	s.opfini();
+	s.done();
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::charge(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Dbmgr::charge(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	pBillingChargeHandler_->charge(pChannel, s);
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::onChargeCB(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Dbmgr::onChargeCB(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	pBillingChargeHandler_->onChargeCB(s);
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::eraseClientReq(Mercury::Channel* pChannel, std::string& logkey)
+void Dbmgr::eraseClientReq(Network::Channel* pChannel, std::string& logkey)
 {
 	pBillingAccountHandler_->eraseClientReq(pChannel, logkey);
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::accountActivate(Mercury::Channel* pChannel, std::string& scode)
+void Dbmgr::accountActivate(Network::Channel* pChannel, std::string& scode)
 {
 	INFO_MSG(fmt::format("Dbmgr::accountActivate: code={}.\n", scode));
 	pBillingAccountHandler_->accountActivate(pChannel, scode);
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::accountReqResetPassword(Mercury::Channel* pChannel, std::string& accountName)
+void Dbmgr::accountReqResetPassword(Network::Channel* pChannel, std::string& accountName)
 {
 	INFO_MSG(fmt::format("Dbmgr::accountReqResetPassword: accountName={}.\n", accountName));
 	pBillingAccountHandler_->accountReqResetPassword(pChannel, accountName);
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::accountResetPassword(Mercury::Channel* pChannel, std::string& accountName, std::string& newpassword, std::string& code)
+void Dbmgr::accountResetPassword(Network::Channel* pChannel, std::string& accountName, std::string& newpassword, std::string& code)
 {
 	INFO_MSG(fmt::format("Dbmgr::accountResetPassword: accountName={}.\n", accountName));
 	pBillingAccountHandler_->accountResetPassword(pChannel, accountName, newpassword, code);
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::accountReqBindMail(Mercury::Channel* pChannel, ENTITY_ID entityID, std::string& accountName, 
+void Dbmgr::accountReqBindMail(Network::Channel* pChannel, ENTITY_ID entityID, std::string& accountName, 
 							   std::string& password, std::string& email)
 {
 	INFO_MSG(fmt::format("Dbmgr::accountReqBindMail: accountName={}, email={}.\n", accountName, email));
@@ -672,14 +719,14 @@ void Dbmgr::accountReqBindMail(Mercury::Channel* pChannel, ENTITY_ID entityID, s
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::accountBindMail(Mercury::Channel* pChannel, std::string& username, std::string& scode)
+void Dbmgr::accountBindMail(Network::Channel* pChannel, std::string& username, std::string& scode)
 {
 	INFO_MSG(fmt::format("Dbmgr::accountBindMail: username={}, scode={}.\n", username, scode));
 	pBillingAccountHandler_->accountBindMail(pChannel, username, scode);
 }
 
 //-------------------------------------------------------------------------------------
-void Dbmgr::accountNewPassword(Mercury::Channel* pChannel, ENTITY_ID entityID, std::string& accountName, 
+void Dbmgr::accountNewPassword(Network::Channel* pChannel, ENTITY_ID entityID, std::string& accountName, 
 							   std::string& password, std::string& newpassword)
 {
 	INFO_MSG(fmt::format("Dbmgr::accountNewPassword: accountName={}.\n", accountName));

@@ -18,10 +18,10 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "cellapp.hpp"
-#include "entity.hpp"
-#include "moveto_point_handler.hpp"	
-#include "move_controller.hpp"	
+#include "cellapp.h"
+#include "entity.h"
+#include "moveto_point_handler.h"	
+#include "move_controller.h"	
 
 namespace KBEngine{	
 
@@ -71,9 +71,9 @@ MoveToPointHandler::~MoveToPointHandler()
 //-------------------------------------------------------------------------------------
 void MoveToPointHandler::addToStream(KBEngine::MemoryStream& s)
 {
-	uint8 utype = type();
+	// uint8 utype = type();
 
-	s << utype << destPos_.x << destPos_.y << destPos_.z << velocity_ << faceMovement_ << moveVertically_ <<
+	s << /*utype <<*/ destPos_.x << destPos_.y << destPos_.z << velocity_ << faceMovement_ << moveVertically_ <<
 		range_ << layer_;
 
 	s.appendBlob(script::Pickler::pickle(pyuserarg_));

@@ -53,13 +53,12 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>../dependencies/g3dlite;../python/PC;../python/Include;../;../../common;../../lib/dependencies/log4cxx/include;../../lib/dependencies/mysql;../../lib/dependencies;../../lib/dependencies/openssl/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../dependencies/g3dlite;../python/PC;../python/Include;../;../../common;../../lib/dependencies/log4cxx/src/main/include;../../lib/dependencies/mysql;../../lib/dependencies;../../lib/dependencies/openssl/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>ENABLE_WATCHERS;WIN32;_DEBUG;_LIB;CODE_INLINE;KBE_USE_ASSERTS;LOG4CXX_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MinimalRebuild>true</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <PrecompiledHeader>
-      </PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
       <ObjectFileName>$(IntDir)</ObjectFileName>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).pdb</ProgramDataBaseFileName>
@@ -75,12 +74,11 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <AdditionalIncludeDirectories>../dependencies/g3dlite;../python/PC;../python/Include;../;../../common;../../lib/dependencies/log4cxx/include;../../lib/dependencies/mysql;../../lib/dependencies;../../lib/dependencies/openssl/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../dependencies/g3dlite;../python/PC;../python/Include;../;../../common;../../lib/dependencies/log4cxx/src/main/include;../../lib/dependencies/mysql;../../lib/dependencies;../../lib/dependencies/openssl/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>ENABLE_WATCHERS;WIN32;NDEBUG;_LIB;CODE_INLINE;KBE_USE_ASSERTS;LOG4CXX_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <PrecompiledHeader>
-      </PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
       <ObjectFileName>$(IntDir)</ObjectFileName>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).pdb</ProgramDataBaseFileName>
@@ -102,20 +100,21 @@
     <ClCompile Include="kbe_table_mysql.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="common.hpp" />
-    <ClInclude Include="db_exception.hpp" />
-    <ClInclude Include="db_interface_mysql.hpp" />
-    <ClInclude Include="db_transaction.hpp" />
-    <ClInclude Include="entity_sqlstatement_mapping.hpp" />
-    <ClInclude Include="entity_table_mysql.hpp" />
-    <ClInclude Include="kbe_table_mysql.hpp" />
-    <ClInclude Include="read_entity_helper.hpp" />
-    <ClInclude Include="remove_entity_helper.hpp" />
-    <ClInclude Include="sqlstatement.hpp" />
-    <ClInclude Include="write_entity_helper.hpp" />
+    <ClInclude Include="common.h" />
+    <ClInclude Include="db_exception.h" />
+    <ClInclude Include="db_interface_mysql.h" />
+    <ClInclude Include="db_context.h" />
+    <ClInclude Include="db_transaction.h" />
+    <ClInclude Include="entity_sqlstatement_mapping.h" />
+    <ClInclude Include="entity_table_mysql.h" />
+    <ClInclude Include="kbe_table_mysql.h" />
+    <ClInclude Include="read_entity_helper.h" />
+    <ClInclude Include="remove_entity_helper.h" />
+    <ClInclude Include="sqlstatement.h" />
+    <ClInclude Include="write_entity_helper.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="entity_table_mysql.ipp" />
+    <None Include="entity_table_mysql.inl" />
     <None Include="ReadMe.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

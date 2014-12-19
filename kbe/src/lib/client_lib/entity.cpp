@@ -19,19 +19,20 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "clientapp.hpp"
-#include "entity.hpp"
-#include "clientobjectbase.hpp"
-#include "entitydef/entity_mailbox.hpp"
-#include "network/channel.hpp"	
-#include "network/bundle.hpp"	
-#include "network/fixed_messages.hpp"
+#include "clientapp.h"
+#include "entity.h"
+#include "clientobjectbase.h"
+#include "entitydef/entity_mailbox.h"
+#include "network/channel.h"	
+#include "network/bundle.h"	
+#include "network/fixed_messages.h"
+#include "pyscript/py_gc.h"
 
-#include "../../../server/baseapp/baseapp_interface.hpp"
-#include "../../../server/cellapp/cellapp_interface.hpp"
+#include "../../../server/baseapp/baseapp_interface.h"
+#include "../../../server/cellapp/cellapp_interface.h"
 
 #ifndef CODE_INLINE
-#include "entity.ipp"
+#include "entity.inl"
 #endif
 
 namespace KBEngine{
@@ -71,6 +72,7 @@ enterword_(false),
 isOnGound_(true)
 {
 	ENTITY_INIT_PROPERTYS(Entity);
+	script::PyGC::incTracing("Entity");
 }
 
 //-------------------------------------------------------------------------------------
@@ -78,7 +80,27 @@ Entity::~Entity()
 {
 	enterword_ = false;
 	ENTITY_DECONSTRUCTION(Entity);
+	S_RELEASE(cellMailbox_);
+	S_RELEASE(baseMailbox_);
+
+	script::PyGC::decTracing("Entity");
+	
+	if(pClientApp_->pEntities())
+		pClientApp_->pEntities()->pGetbages()->erase(id());
+
+	Py_DECREF(pClientApp_);
 }	
+
+//-------------------------------------------------------------------------------------
+void Entity::pClientApp(ClientObjectBase* p)
+{ 
+	if(p)
+		Py_INCREF(p);
+	else
+		Py_DECREF(pClientApp_);
+
+	pClientApp_ = p; 
+}
 
 //-------------------------------------------------------------------------------------
 PyObject* Entity::pyGetBaseMailbox()
@@ -126,7 +148,7 @@ void Entity::onDefDataChanged(const PropertyDescription* propertyDescription, Py
 }
 
 //-------------------------------------------------------------------------------------
-void Entity::onRemoteMethodCall(Mercury::Channel* pChannel, MemoryStream& s)
+void Entity::onRemoteMethodCall(Network::Channel* pChannel, MemoryStream& s)
 {
 	ENTITY_METHOD_UID utype = 0;
 	
@@ -196,17 +218,17 @@ void Entity::onUpdatePropertys(MemoryStream& s)
 
 	if(!scriptModule_->usePropertyDescrAlias())
 	{
-		Mercury::FixedMessages::MSGInfo* msgInfo =
-					Mercury::FixedMessages::getSingleton().isFixed("Property::position");
+		Network::FixedMessages::MSGInfo* msgInfo =
+					Network::FixedMessages::getSingleton().isFixed("Property::position");
 
 		if(msgInfo != NULL)
 			posuid = msgInfo->msgid;
 
-		msgInfo = Mercury::FixedMessages::getSingleton().isFixed("Property::direction");
+		msgInfo = Network::FixedMessages::getSingleton().isFixed("Property::direction");
 		if(msgInfo != NULL)
 			diruid = msgInfo->msgid;
 
-		msgInfo = Mercury::FixedMessages::getSingleton().isFixed("Property::spaceID");
+		msgInfo = Network::FixedMessages::getSingleton().isFixed("Property::spaceID");
 		if(msgInfo != NULL)
 			spaceuid = msgInfo->msgid;
 	}
@@ -217,7 +239,7 @@ void Entity::onUpdatePropertys(MemoryStream& s)
 		spaceuid = ENTITY_BASE_PROPERTY_ALIASID_SPACEID;
 	}
 
-	while(s.opsize() > 0)
+	while(s.length() > 0)
 	{
 		ENTITY_PROPERTY_UID uid;
 		uint8 aliasID = 0;

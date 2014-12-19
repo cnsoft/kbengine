@@ -18,14 +18,14 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "baseapp.hpp"
-#include "base_remotemethod.hpp"
-#include "entitydef/method.hpp"
-#include "helper/profile.hpp"	
-#include "network/bundle.hpp"
-#include "helper/eventhistory_stats.hpp"
+#include "baseapp.h"
+#include "base_remotemethod.h"
+#include "entitydef/method.h"
+#include "helper/profile.h"	
+#include "network/bundle.h"
+#include "helper/eventhistory_stats.h"
 
-#include "client_lib/client_interface.hpp"
+#include "client_lib/client_interface.h"
 
 namespace KBEngine{	
 
@@ -76,7 +76,7 @@ PyObject* BaseRemoteMethod::tp_call(PyObject* self, PyObject* args,
 	// 如果是调用客户端方法， 我们记录事件并且记录带宽
 	if(methodDescription->checkArgs(args))
 	{
-		Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 		mailbox->newMail((*pBundle));
 
 		MemoryStream* mstream = MemoryStream::ObjPool().createObject();
@@ -93,7 +93,7 @@ PyObject* BaseRemoteMethod::tp_call(PyObject* self, PyObject* args,
 		
 		static_cast<Proxy*>(pEntity)->sendToClient(ClientInterface::onRemoteMethodCall, pBundle);
 
-		//Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+		//Network::Bundle::ObjPool().reclaimObject(pBundle);
 		MemoryStream::ObjPool().reclaimObject(mstream);
 	}
 	

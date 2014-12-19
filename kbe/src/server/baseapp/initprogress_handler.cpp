@@ -18,25 +18,25 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "baseapp.hpp"
-#include "initprogress_handler.hpp"
-#include "entitydef/scriptdef_module.hpp"
-#include "entitydef/entity_macro.hpp"
-#include "network/fixed_messages.hpp"
-#include "math/math.hpp"
-#include "network/bundle.hpp"
-#include "network/channel.hpp"
+#include "baseapp.h"
+#include "initprogress_handler.h"
+#include "entitydef/scriptdef_module.h"
+#include "entitydef/entity_macro.h"
+#include "network/fixed_messages.h"
+#include "math/math.h"
+#include "network/bundle.h"
+#include "network/channel.h"
 
-#include "../../server/baseappmgr/baseappmgr_interface.hpp"
+#include "../../server/baseappmgr/baseappmgr_interface.h"
 
 namespace KBEngine{	
 
 //-------------------------------------------------------------------------------------
-InitProgressHandler::InitProgressHandler(Mercury::NetworkInterface & networkInterface):
+InitProgressHandler::InitProgressHandler(Network::NetworkInterface & networkInterface):
 Task(),
 networkInterface_(networkInterface)
 {
-	networkInterface.mainDispatcher().addFrequentTask(this);
+	networkInterface.dispatcher().addFrequentTask(this);
 }
 
 //-------------------------------------------------------------------------------------
@@ -50,7 +50,7 @@ InitProgressHandler::~InitProgressHandler()
 bool InitProgressHandler::process()
 {
 	Components::COMPONENTS& cts = Components::getSingleton().getComponents(BASEAPPMGR_TYPE);
-	Mercury::Channel* pChannel = NULL;
+	Network::Channel* pChannel = NULL;
 
 	if(cts.size() > 0)
 	{
@@ -67,11 +67,11 @@ bool InitProgressHandler::process()
 	float v = 0.0f;
 	bool completed = false;
 
-	if(PyObject_HasAttrString(Baseapp::getSingleton().getEntryScript().get(), "readyForLogin") > 0)
+	if(PyObject_HasAttrString(Baseapp::getSingleton().getEntryScript().get(), "onReadyForLogin") > 0)
 	{
 		// 所有脚本都加载完毕
 		PyObject* pyResult = PyObject_CallMethod(Baseapp::getSingleton().getEntryScript().get(), 
-											const_cast<char*>("readyForLogin"), 
+											const_cast<char*>("onReadyForLogin"), 
 											const_cast<char*>("i"), 
 											g_componentGroupOrder);
 
@@ -114,7 +114,7 @@ bool InitProgressHandler::process()
 		completed = true;
 	}
 
-	Mercury::Bundle::SmartPoolObjectPtr bundleptr = Mercury::Bundle::createSmartPoolObj();
+	Network::Bundle::SmartPoolObjectPtr bundleptr = Network::Bundle::createSmartPoolObj();
 
 	(*bundleptr)->newMessage(BaseappmgrInterface::onBaseappInitProgress);
 	(*(*bundleptr)) << g_componentID << v;

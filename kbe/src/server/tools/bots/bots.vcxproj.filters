@@ -13,6 +13,9 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
     </Filter>
+    <Filter Include="Inline Files">
+      <UniqueIdentifier>{63359455-c239-4fdc-9033-7af896514433}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bots.cpp">
@@ -41,25 +44,25 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="bots.hpp">
+    <ClInclude Include="bots.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="bots_interface.hpp">
+    <ClInclude Include="bots_interface.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="bots_interface_macros.hpp">
+    <ClInclude Include="bots_interface_macros.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="clientobject.hpp">
+    <ClInclude Include="clientobject.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="create_and_login_handler.hpp">
+    <ClInclude Include="create_and_login_handler.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="profile.hpp">
+    <ClInclude Include="profile.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="pybots.hpp">
+    <ClInclude Include="pybots.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

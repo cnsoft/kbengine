@@ -19,22 +19,23 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "message_handler.hpp"
-#include "cstdkbe/md5.hpp"
-#include "network/channel.hpp"
-#include "network/network_interface.hpp"
-#include "network/packet_receiver.hpp"
-#include "network/fixed_messages.hpp"
-#include "helper/watcher.hpp"
+#include "message_handler.h"
+#include "common/md5.h"
+#include "network/channel.h"
+#include "network/network_interface.h"
+#include "network/packet_receiver.h"
+#include "network/fixed_messages.h"
+#include "helper/watcher.h"
+#include "xmlplus/xmlplus.h"
+#include "resmgr/resmgr.h"	
 
 namespace KBEngine { 
-namespace Mercury
+namespace Network
 {
-Mercury::MessageHandlers* MessageHandlers::pMainMessageHandlers = 0;
+Network::MessageHandlers* MessageHandlers::pMainMessageHandlers = 0;
 std::vector<MessageHandlers*>* g_pMessageHandlers;
 
-static Mercury::FixedMessages* g_fm;
-KBE_MD5 MessageHandlers::__md5;
+static Network::FixedMessages* g_fm;
 
 //-------------------------------------------------------------------------------------
 MessageHandlers::MessageHandlers():
@@ -42,11 +43,11 @@ msgHandlers_(),
 msgID_(1),
 exposedMessages_()
 {
-	g_fm = Mercury::FixedMessages::getSingletonPtr();
+	g_fm = Network::FixedMessages::getSingletonPtr();
 	if(g_fm == NULL)
-		g_fm = new Mercury::FixedMessages;
+		g_fm = new Network::FixedMessages;
 
-	Mercury::FixedMessages::getSingleton().loadConfig("server/fixed_mercury_messages.xml");
+	Network::FixedMessages::getSingleton().loadConfig("server/messages_fixed.xml");
 	messageHandlers().push_back(this);
 }
 
@@ -175,7 +176,7 @@ MessageHandler* MessageHandlers::add(std::string ihName, MessageArgs* args,
 	msgHandler->onInstall();
 	msgHandlers_[msgHandler->msgID] = msgHandler;
 	
-	if(msgLen == MERCURY_VARIABLE_MESSAGE)
+	if(msgLen == NETWORK_VARIABLE_MESSAGE)
 	{
 		//printf("\tMessageHandlers::add(%d): name=%s, msgID=%d, size=Variable.\n", 
 		//	(int32)msgHandlers_.size(), ihName.c_str(), msgHandler->msgID);
@@ -186,7 +187,7 @@ MessageHandler* MessageHandlers::add(std::string ihName, MessageArgs* args,
 		{
 			msgHandler->msgLen = args->dataSize();
 
-			if(msgHandler->type() == MERCURY_MESSAGE_TYPE_ENTITY)
+			if(msgHandler->type() == NETWORK_MESSAGE_TYPE_ENTITY)
 			{
 				msgHandler->msgLen += sizeof(ENTITY_ID);
 			}
@@ -199,36 +200,95 @@ MessageHandler* MessageHandlers::add(std::string ihName, MessageArgs* args,
 	//if(isfixedMsg)
 	//	printf("\t\t!!!message is fixed.!!!\n");
 
-	MessageHandlers::md5().append((void*)ihName.c_str(), ihName.size());
-	MessageHandlers::md5().append((void*)&msgHandler->msgID, sizeof(MessageID));
-	MessageHandlers::md5().append((void*)&msgLen, sizeof(int32));
-	MessageHandlers::md5().append((void*)&msgHandler->exposed, sizeof(bool));
-	 
-	int32 argsize = args->strArgsTypes.size();
-	MessageHandlers::md5().append((void*)&argsize, sizeof(int32));
-
-	int32 argsdataSize = args->dataSize();
-	MessageHandlers::md5().append((void*)&argsdataSize, sizeof(int32));
-
-	int32 argstype = (int32)args->type();
-	MessageHandlers::md5().append((void*)&argstype, sizeof(int32));
-
-	std::vector<std::string>::iterator saiter = args->strArgsTypes.begin();
-	for(; saiter != args->strArgsTypes.end(); saiter++)
-	{
-		MessageHandlers::md5().append((void*)(*saiter).c_str(), (*saiter).size());
-	}
-
-	int32 currsize = msgHandlers_.size();
-	MessageHandlers::md5().append((void*)&currsize, sizeof(int32));
-
 	return msgHandlers_[msgHandler->msgID];
 }
 
 //-------------------------------------------------------------------------------------
 std::string MessageHandlers::getDigestStr()
 {
-	return MessageHandlers::md5().getDigestStr();
+	static KBE_MD5 md5;
+
+	if(!md5.isFinal())
+	{
+		std::map<uint16, std::pair< std::string, std::string> > errsDescrs;
+
+		TiXmlNode *rootNode = NULL;
+		XmlPlus* xml = new XmlPlus(Resmgr::getSingleton().matchRes("server/server_errors.xml").c_str());
+
+		if(!xml->isGood())
+		{
+			ERROR_MSG(fmt::format("MessageHandlers::getDigestStr(): load {} is failed!\n",
+				Resmgr::getSingleton().matchRes("server/server_errors.xml")));
+
+			SAFE_RELEASE(xml);
+			return "";
+		}
+
+		int32 isize = 0;
+
+		rootNode = xml->getRootNode();
+		XML_FOR_BEGIN(rootNode)
+		{
+			TiXmlNode* node = xml->enterNode(rootNode->FirstChild(), "id");
+			TiXmlNode* node1 = xml->enterNode(rootNode->FirstChild(), "descr");
+
+			int32 val1 = xml->getValInt(node);
+			md5.append((void*)&val1, sizeof(int32));
+
+			std::string val2 = xml->getKey(rootNode);
+			md5.append((void*)val2.c_str(), val2.size());
+
+			std::string val3 = xml->getVal(node1);
+			md5.append((void*)val3.c_str(), val3.size());
+			isize++;
+		}
+		XML_FOR_END(rootNode);
+
+		SAFE_RELEASE(xml);
+
+		md5.append((void*)&isize, sizeof(int32));
+
+		
+
+		std::vector<MessageHandlers*>& msgHandlers = messageHandlers();
+		isize += msgHandlers.size();
+		md5.append((void*)&isize, sizeof(int32));
+
+		std::vector<MessageHandlers*>::const_iterator rootiter = msgHandlers.begin();
+		for(; rootiter != msgHandlers.end(); rootiter++)
+		{
+			isize += (*rootiter)->msgHandlers().size();
+			md5.append((void*)&isize, sizeof(int32));
+
+			MessageHandlerMap::const_iterator iter = (*rootiter)->msgHandlers().begin();
+			for(; iter != (*rootiter)->msgHandlers().end(); iter++)
+			{
+				MessageHandler* pMessageHandler = iter->second;
+			
+				md5.append((void*)pMessageHandler->name.c_str(), pMessageHandler->name.size());
+				md5.append((void*)&pMessageHandler->msgID, sizeof(MessageID));
+				md5.append((void*)&pMessageHandler->msgLen, sizeof(int32));
+				md5.append((void*)&pMessageHandler->exposed, sizeof(bool));
+	 
+				int32 argsize = pMessageHandler->pArgs->strArgsTypes.size();
+				md5.append((void*)&argsize, sizeof(int32));
+
+				int32 argsdataSize = pMessageHandler->pArgs->dataSize();
+				md5.append((void*)&argsdataSize, sizeof(int32));
+
+				int32 argstype = (int32)pMessageHandler->pArgs->type();
+				md5.append((void*)&argstype, sizeof(int32));
+
+				std::vector<std::string>::iterator saiter = pMessageHandler->pArgs->strArgsTypes.begin();
+				for(; saiter != pMessageHandler->pArgs->strArgsTypes.end(); saiter++)
+				{
+					md5.append((void*)(*saiter).c_str(), (*saiter).size());
+				}
+			}
+		}
+	}
+
+	return md5.getDigestStr();
 }
 
 //-------------------------------------------------------------------------------------

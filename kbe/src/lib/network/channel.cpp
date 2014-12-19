@@ -19,26 +19,26 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "channel.hpp"
+#include "channel.h"
 #ifndef CODE_INLINE
-#include "channel.ipp"
+#include "channel.inl"
 #endif
 
-#include "network/websocket_protocol.hpp"
-#include "network/html5_packet_filter.hpp"
-#include "network/html5_packet_reader.hpp"
-#include "network/bundle.hpp"
-#include "network/packet_reader.hpp"
-#include "network/network_interface.hpp"
-#include "network/tcp_packet_receiver.hpp"
-#include "network/udp_packet_receiver.hpp"
-#include "network/tcp_packet.hpp"
-#include "network/udp_packet.hpp"
-#include "network/message_handler.hpp"
-#include "network/mercurystats.hpp"
+#include "network/websocket_protocol.h"
+#include "network/html5_packet_filter.h"
+#include "network/html5_packet_reader.h"
+#include "network/bundle.h"
+#include "network/packet_reader.h"
+#include "network/network_interface.h"
+#include "network/tcp_packet_receiver.h"
+#include "network/udp_packet_receiver.h"
+#include "network/tcp_packet.h"
+#include "network/udp_packet.h"
+#include "network/message_handler.h"
+#include "network/network_stats.h"
 
 namespace KBEngine { 
-namespace Mercury
+namespace Network
 {
 const int EXTERNAL_CHANNEL_SIZE = 256;
 const int INTERNAL_CHANNEL_SIZE = 4096;
@@ -219,7 +219,7 @@ void Channel::destroy()
 {
 	if(isDestroyed_)
 	{
-		CRITICAL_MSG("is channel has Destroyed!");
+		CRITICAL_MSG("is channel has Destroyed!\n");
 		return;
 	}
 
@@ -253,7 +253,7 @@ void Channel::clearState( bool warnOnDiscard /*=false*/ )
 			for(; iter != bufferedReceives_[i].end(); iter++)
 			{
 				Packet* pPacket = (*iter);
-				if(pPacket->opsize() > 0)
+				if(pPacket->length() > 0)
 					hasDiscard++;
 
 				if(pPacket->isTCPPacket())
@@ -324,6 +324,12 @@ int32 Channel::bundlesLength()
 void Channel::pushBundle(Bundle* pBundle)
 {
 	bundles_.push_back(pBundle);
+
+	// 如果打开了消息跟踪开关，这里就应该实时的发送出去
+	if(Network::g_trace_packet > 0)
+	{
+		send();
+	}
 }
 
 //-------------------------------------------------------------------------------------
@@ -464,29 +470,29 @@ void Channel::addReceiveWindow(Packet* pPacket)
 {
 	bufferedReceives_[bufferedReceivesIdx_].push_back(pPacket);
 
-	if(Mercury::g_receiveWindowMessagesOverflowCritical > 0 && bufferedReceives_[bufferedReceivesIdx_].size() > Mercury::g_receiveWindowMessagesOverflowCritical)
+	if(Network::g_receiveWindowMessagesOverflowCritical > 0 && bufferedReceives_[bufferedReceivesIdx_].size() > Network::g_receiveWindowMessagesOverflowCritical)
 	{
 		if(this->isExternal())
 		{
 			WARNING_MSG(fmt::format("Channel::addReceiveWindow[{:p}]: external channel({}), bufferedMessages is overflow({} > {}).\n", 
-				(void*)this, this->c_str(), (int)bufferedReceives_[bufferedReceivesIdx_].size(), Mercury::g_receiveWindowMessagesOverflowCritical));
+				(void*)this, this->c_str(), (int)bufferedReceives_[bufferedReceivesIdx_].size(), Network::g_receiveWindowMessagesOverflowCritical));
 
-			if(Mercury::g_extReceiveWindowMessagesOverflow > 0 && 
-				bufferedReceives_[bufferedReceivesIdx_].size() >  Mercury::g_extReceiveWindowMessagesOverflow)
+			if(Network::g_extReceiveWindowMessagesOverflow > 0 && 
+				bufferedReceives_[bufferedReceivesIdx_].size() >  Network::g_extReceiveWindowMessagesOverflow)
 			{
 				ERROR_MSG(fmt::format("Channel::addReceiveWindow[{:p}]: external channel({}), bufferedMessages is overflow({} > {}), Try adjusting the kbengine_defs.xml->receiveWindowOverflow.\n", 
-					(void*)this, this->c_str(), (int)bufferedReceives_[bufferedReceivesIdx_].size(), Mercury::g_extReceiveWindowMessagesOverflow));
+					(void*)this, this->c_str(), (int)bufferedReceives_[bufferedReceivesIdx_].size(), Network::g_extReceiveWindowMessagesOverflow));
 
 				this->condemn();
 			}
 		}
 		else
 		{
-			if(Mercury::g_intReceiveWindowMessagesOverflow > 0 && 
-				bufferedReceives_[bufferedReceivesIdx_].size() > Mercury::g_intReceiveWindowMessagesOverflow)
+			if(Network::g_intReceiveWindowMessagesOverflow > 0 && 
+				bufferedReceives_[bufferedReceivesIdx_].size() > Network::g_intReceiveWindowMessagesOverflow)
 			{
 				WARNING_MSG(fmt::format("Channel::addReceiveWindow[{:p}]: internal channel({}), bufferedMessages is overflow({} > {}).\n", 
-					(void*)this, this->c_str(), (int)bufferedReceives_[bufferedReceivesIdx_].size(), Mercury::g_intReceiveWindowMessagesOverflow));
+					(void*)this, this->c_str(), (int)bufferedReceives_[bufferedReceivesIdx_].size(), Network::g_intReceiveWindowMessagesOverflow));
 			}
 		}
 	}
@@ -534,7 +540,7 @@ void Channel::handshake()
 }
 
 //-------------------------------------------------------------------------------------
-void Channel::processPackets(KBEngine::Mercury::MessageHandlers* pMsgHandlers)
+void Channel::processPackets(KBEngine::Network::MessageHandlers* pMsgHandlers)
 {
 	lastTickBytesReceived_ = 0;
 
@@ -585,7 +591,7 @@ void Channel::processPackets(KBEngine::Mercury::MessageHandlers* pMsgHandlers)
 		}
 	}catch(MemoryStreamException &)
 	{
-		Mercury::MessageHandler* pMsgHandler = pMsgHandlers->find(pPacketReader_->currMsgID());
+		Network::MessageHandler* pMsgHandler = pMsgHandlers->find(pPacketReader_->currMsgID());
 		WARNING_MSG(fmt::format("Channel::processPackets({}): packet invalid. currMsg=(name={}, id={}, len={}), currMsgLen={}\n",
 			this->c_str()
 			, (pMsgHandler == NULL ? "unknown" : pMsgHandler->name) 
@@ -599,6 +605,7 @@ void Channel::processPackets(KBEngine::Mercury::MessageHandlers* pMsgHandlers)
 	}
 
 	bufferedReceives_[idx].clear();
+	this->send();
 }
 
 //-------------------------------------------------------------------------------------
@@ -628,7 +635,7 @@ bool Channel::waitSend()
 //-------------------------------------------------------------------------------------
 EventDispatcher & Channel::dispatcher()
 {
-	return pNetworkInterface_->mainDispatcher();
+	return pNetworkInterface_->dispatcher();
 }
 
 //-------------------------------------------------------------------------------------

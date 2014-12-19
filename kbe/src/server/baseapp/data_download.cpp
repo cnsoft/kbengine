@@ -18,12 +18,12 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "baseapp.hpp"
-#include "data_download.hpp"
-#include "data_downloads.hpp"
-#include "resmgr/resmgr.hpp"
+#include "baseapp.h"
+#include "data_download.h"
+#include "data_downloads.h"
+#include "resmgr/resmgr.h"
 
-#include "client_lib/client_interface.hpp"
+#include "client_lib/client_interface.h"
 
 namespace KBEngine{	
 
@@ -49,10 +49,17 @@ error_(false)
 DataDownload::~DataDownload()
 {
 	SAFE_RELEASE_ARRAY(stream_);
+
+	Proxy* proxy = static_cast<Proxy*>(Baseapp::getSingleton().findEntity(entityID_));
+
+	if(proxy)
+	{
+		proxy->onStreamComplete(id_, totalBytes_ > 0 ? totalSentBytes_ == totalBytes_ : false);
+	}
 }
 
 //-------------------------------------------------------------------------------------
-bool DataDownload::send(const Mercury::MessageHandler& msgHandler, Mercury::Bundle* pBundle)
+bool DataDownload::send(const Network::MessageHandler& msgHandler, Network::Bundle* pBundle)
 {
 	Proxy* proxy = static_cast<Proxy*>(Baseapp::getSingleton().findEntity(entityID_));
 	
@@ -60,7 +67,7 @@ bool DataDownload::send(const Mercury::MessageHandler& msgHandler, Mercury::Bund
 		proxy->sendToClient(msgHandler, pBundle);
 	}
 	else{
-		Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+		Network::Bundle::ObjPool().reclaimObject(pBundle);
 		return false;
 	}
 
@@ -82,7 +89,7 @@ thread::TPTask::TPTaskState DataDownload::presentMainThread()
 
 	if(remainSent_ > 0 && currSent_ < remainSent_)
 	{
-		Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 
 		if(!sentStart_)
 		{
@@ -146,12 +153,12 @@ thread::TPTask::TPTaskState DataDownload::presentMainThread()
 
 	if(totalSentBytes_ == totalBytes_)
 	{
-		DEBUG_MSG(fmt::format("DataDownload::presentMainThread: proxy({0}), downloadID({1}), type({6}), sentBytes={5},{2}/{3} ({:.2f}%).\n",
+		DEBUG_MSG(fmt::format("DataDownload::presentMainThread: proxy({0}), downloadID({1}), type({6}), sentBytes={5},{2}/{3} ({4:.2f}%).\n",
 			entityID(), id(), totalSentBytes_, this->totalBytes(), 100.0f, datasize, type()));
 
 		pDataDownloads_->onDownloadCompleted(this);
 
-		Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 
 
 		pBundle->newMessage(ClientInterface::onStreamDataCompleted);
@@ -161,7 +168,7 @@ thread::TPTask::TPTaskState DataDownload::presentMainThread()
 		return thread::TPTask::TPTASK_STATE_COMPLETED; 
 	}
 	
-	DEBUG_MSG(fmt::format("DataDownload::presentMainThread: proxy({0}), downloadID({1}), type({6}), sentBytes={5},{2}/{3} ({:.2f}%).\n",
+	DEBUG_MSG(fmt::format("DataDownload::presentMainThread: proxy({0}), downloadID({1}), type({6}), sentBytes={5},{2}/{3} ({4:.2f}%).\n",
 		entityID(), id(), totalSentBytes_, this->totalBytes(), 
 		(((float)totalSentBytes_ / (float)this->totalBytes()) * 100.0f), datasize, type()));
 

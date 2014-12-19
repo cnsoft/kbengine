@@ -18,12 +18,12 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "method.hpp"
-#include "entitydef.hpp"
-#include "network/bundle.hpp"
+#include "method.h"
+#include "entitydef.h"
+#include "network/bundle.h"
 
 #ifndef CODE_INLINE
-#include "method.ipp"
+#include "method.inl"
 #endif
 
 namespace KBEngine{
@@ -197,7 +197,7 @@ PyObject* MethodDescription::createFromStream(MemoryStream* mstream)
 
 		// 设置一个调用者ID提供给脚本判断来源是否正确
 		KBE_ASSERT(currCallerID_ > 0);
-		PyTuple_SET_ITEM(&*pyArgsTuple, 0, PyLong_FromLong(currCallerID_));
+		PyTuple_SET_ITEM(pyArgsTuple, 0, PyLong_FromLong(currCallerID_));
 	}
 	else
 		pyArgsTuple = PyTuple_New(argSize);
@@ -212,7 +212,7 @@ PyObject* MethodDescription::createFromStream(MemoryStream* mstream)
 				this->getName(), index, argTypes_[index]->getName()));
 		}
 
-		PyTuple_SET_ITEM(&*pyArgsTuple, index + offset, pyitem);
+		PyTuple_SET_ITEM(pyArgsTuple, index + offset, pyitem);
 	}
 	
 	return pyArgsTuple;
@@ -230,7 +230,7 @@ PyObject* MethodDescription::call(PyObject* func, PyObject* args)
 	PyObject* pyResult = NULL;
 	if (!PyCallable_Check(func))
 	{
-		PyErr_Format(PyExc_TypeError, "MethodDescription::call: Script[%s] call attempted on a error object!", 
+		PyErr_Format(PyExc_TypeError, "MethodDescription::call: method[%s] call attempted on a error object!", 
 			getName());
 	}
 	else

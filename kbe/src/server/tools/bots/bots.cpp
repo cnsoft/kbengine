@@ -18,38 +18,37 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "pybots.hpp"
-#include "bots.hpp"
-#include "server/telnet_server.hpp"
-#include "client_lib/entity.hpp"
-#include "clientobject.hpp"
-#include "bots_interface.hpp"
-#include "resmgr/resmgr.hpp"
-#include "network/common.hpp"
-#include "network/tcp_packet.hpp"
-#include "network/udp_packet.hpp"
-#include "network/message_handler.hpp"
-#include "thread/threadpool.hpp"
-#include "server/componentbridge.hpp"
-#include "server/serverconfig.hpp"
-#include "helper/watch_pools.hpp"
-#include "helper/console_helper.hpp"
-#include "helper/watcher.hpp"
-#include "helper/profile.hpp"
-#include "helper/profiler.hpp"
-#include "helper/profile_handler.hpp"
-#include "pyscript/pyprofile_handler.hpp"
+#include "pybots.h"
+#include "bots.h"
+#include "server/telnet_server.h"
+#include "server/components.h"
+#include "client_lib/entity.h"
+#include "clientobject.h"
+#include "bots_interface.h"
+#include "resmgr/resmgr.h"
+#include "network/common.h"
+#include "network/tcp_packet.h"
+#include "network/udp_packet.h"
+#include "network/message_handler.h"
+#include "thread/threadpool.h"
+#include "server/components.h"
+#include "server/serverconfig.h"
+#include "helper/watch_pools.h"
+#include "helper/console_helper.h"
+#include "helper/watcher.h"
+#include "helper/profile.h"
+#include "helper/profiler.h"
+#include "helper/profile_handler.h"
+#include "pyscript/pyprofile_handler.h"
 
-#include "../../../server/baseapp/baseapp_interface.hpp"
-#include "../../../server/loginapp/loginapp_interface.hpp"
+#include "../../../server/baseapp/baseapp_interface.h"
+#include "../../../server/loginapp/loginapp_interface.h"
 
 namespace KBEngine{
 
-Componentbridge* g_pComponentbridge = NULL;
-
 //-------------------------------------------------------------------------------------
-Bots::Bots(Mercury::EventDispatcher& dispatcher, 
-			 Mercury::NetworkInterface& ninterface, 
+Bots::Bots(Network::EventDispatcher& dispatcher, 
+			 Network::NetworkInterface& ninterface, 
 			 COMPONENT_TYPE componentType,
 			 COMPONENT_ID componentID):
 ClientApp(dispatcher, ninterface, componentType, componentID),
@@ -59,17 +58,17 @@ reqCreateAndLoginTotalCount_(g_kbeSrvConfig.getBots().defaultAddBots_totalCount)
 reqCreateAndLoginTickCount_(g_kbeSrvConfig.getBots().defaultAddBots_tickCount),
 reqCreateAndLoginTickTime_(g_kbeSrvConfig.getBots().defaultAddBots_tickTime),
 pCreateAndLoginHandler_(NULL),
-pEventPoller_(Mercury::EventPoller::create()),
+pEventPoller_(Network::EventPoller::create()),
 pTelnetServer_(NULL)
 {
-	KBEngine::Mercury::MessageHandlers::pMainMessageHandlers = &BotsInterface::messageHandlers;
-	g_pComponentbridge = new Componentbridge(ninterface, componentType, componentID);
+	KBEngine::Network::MessageHandlers::pMainMessageHandlers = &BotsInterface::messageHandlers;
+	Components::getSingleton().initialize(&ninterface, componentType, componentID);
 }
 
 //-------------------------------------------------------------------------------------
 Bots::~Bots()
 {
-	SAFE_RELEASE(g_pComponentbridge);
+	Components::getSingleton().finalise();
 	SAFE_RELEASE(pEventPoller_);
 }
 
@@ -77,13 +76,19 @@ Bots::~Bots()
 bool Bots::initialize()
 {
 	// 广播自己的地址给网上上的所有kbemachine
-	this->mainDispatcher().addFrequentTask(&Componentbridge::getSingleton());
+	this->mainDispatcher().addFrequentTask(&Components::getSingleton());
 	return ClientApp::initialize();
 }
 
 //-------------------------------------------------------------------------------------	
 bool Bots::initializeBegin()
 {
+	Network::g_extReceiveWindowBytesOverflow = 0;
+	Network::g_intReceiveWindowBytesOverflow = 0;
+	Network::g_intReceiveWindowMessagesOverflow = 0;
+	Network::g_extReceiveWindowMessagesOverflow = 0;
+	Network::g_receiveWindowMessagesOverflowCritical = 0;
+
 	gameTimer_ = this->mainDispatcher().addTimer(1000000 / g_kbeSrvConfig.gameUpdateHertz(), this,
 							reinterpret_cast<void *>(TIMEOUT_GAME_TICK));
 
@@ -221,7 +226,7 @@ void Bots::handleGameTick()
 }
 
 //-------------------------------------------------------------------------------------
-Mercury::Channel* Bots::findChannelByMailbox(EntityMailbox& mailbox)
+Network::Channel* Bots::findChannelByMailbox(EntityMailbox& mailbox)
 {
 	int32 appID = (int32)mailbox.componentID();
 	ClientObject* pClient = findClientByAppID(appID);
@@ -233,7 +238,7 @@ Mercury::Channel* Bots::findChannelByMailbox(EntityMailbox& mailbox)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::addBots(Mercury::Channel * pChannel, MemoryStream& s)
+void Bots::addBots(Network::Channel * pChannel, MemoryStream& s)
 {
 	uint32	reqCreateAndLoginTotalCount;
 	uint32 reqCreateAndLoginTickCount = 0;
@@ -243,7 +248,7 @@ void Bots::addBots(Mercury::Channel * pChannel, MemoryStream& s)
 
 	reqCreateAndLoginTotalCount_ += reqCreateAndLoginTotalCount;
 
-	if(s.opsize() > 0)
+	if(s.length() > 0)
 	{
 		s >> reqCreateAndLoginTickCount >> reqCreateAndLoginTickTime;
 
@@ -327,11 +332,11 @@ PyObject* Bots::__py_setScriptLogType(PyObject* self, PyObject* args)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::lookApp(Mercury::Channel* pChannel)
+void Bots::lookApp(Network::Channel* pChannel)
 {
 	DEBUG_MSG(fmt::format("Bots::lookApp: {0}\n", pChannel->c_str()));
 
-	Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 	
 	(*pBundle) << g_componentType;
 	(*pBundle) << componentID_;
@@ -340,27 +345,27 @@ void Bots::lookApp(Mercury::Channel* pChannel)
 
 	(*pBundle).send(networkInterface(), pChannel);
 
-	Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+	Network::Bundle::ObjPool().reclaimObject(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::reqCloseServer(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::reqCloseServer(Network::Channel* pChannel, MemoryStream& s)
 {
 	DEBUG_MSG(fmt::format("Bots::reqCloseServer: {0}\n", pChannel->c_str()));
 
-	Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 	
 	bool success = true;
 	(*pBundle) << success;
 	(*pBundle).send(networkInterface(), pChannel);
 
-	Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+	Network::Bundle::ObjPool().reclaimObject(pBundle);
 
 	this->shutDown();
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::reqKillServer(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::reqKillServer(Network::Channel* pChannel, MemoryStream& s)
 {
 	COMPONENT_ID componentID;
 	COMPONENT_TYPE componentType;
@@ -383,7 +388,7 @@ void Bots::reqKillServer(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onExecScriptCommand(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Bots::onExecScriptCommand(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	std::string cmd;
 	s.readBlob(cmd);
@@ -404,7 +409,7 @@ void Bots::onExecScriptCommand(Mercury::Channel* pChannel, KBEngine::MemoryStrea
 	if(getScript().run_simpleString(PyBytes_AsString(pycmd1), &retbuf) == 0)
 	{
 		// 将结果返回给客户端
-		Mercury::Bundle bundle;
+		Network::Bundle bundle;
 		ConsoleInterface::ConsoleExecCommandCBMessageHandler msgHandler;
 		bundle.newMessage(msgHandler);
 		ConsoleInterface::ConsoleExecCommandCBMessageHandlerArgs1::staticAddToBundle(bundle, retbuf);
@@ -418,7 +423,7 @@ void Bots::onExecScriptCommand(Mercury::Channel* pChannel, KBEngine::MemoryStrea
 //-------------------------------------------------------------------------------------
 bool Bots::addClient(ClientObject* pClient)
 {
-	clients().insert(std::make_pair< Mercury::Channel*, ClientObjectPtr >(pClient->pServerChannel(), 
+	clients().insert(std::make_pair< Network::Channel*, ClientObjectPtr >(pClient->pServerChannel(), 
 		ClientObjectPtr(pClient)));
 
 	return true;
@@ -434,7 +439,7 @@ bool Bots::delClient(ClientObject* pClient)
 }
 
 //-------------------------------------------------------------------------------------
-ClientObject* Bots::findClient(Mercury::Channel * pChannel)
+ClientObject* Bots::findClient(Network::Channel * pChannel)
 {
 	CLIENTS::iterator iter = clients().find(pChannel);
 	if(iter != clients().end())
@@ -459,17 +464,17 @@ ClientObject* Bots::findClientByAppID(int32 appID)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onAppActiveTick(Mercury::Channel* pChannel, COMPONENT_TYPE componentType, COMPONENT_ID componentID)
+void Bots::onAppActiveTick(Network::Channel* pChannel, COMPONENT_TYPE componentType, COMPONENT_ID componentID)
 {
 	if(componentType != CLIENT_TYPE)
 		if(pChannel->isExternal())
 			return;
 	
-	Mercury::Channel* pTargetChannel = NULL;
+	Network::Channel* pTargetChannel = NULL;
 	if(componentType != CONSOLE_TYPE && componentType != CLIENT_TYPE)
 	{
 		Components::ComponentInfos* cinfos = 
-			Componentbridge::getComponents().findComponent(componentType, KBEngine::getUserUID(), componentID);
+			Components::getSingleton().findComponent(componentType, KBEngine::getUserUID(), componentID);
 
 		if(cinfos == NULL)
 		{
@@ -493,18 +498,19 @@ void Bots::onAppActiveTick(Mercury::Channel* pChannel, COMPONENT_TYPE componentT
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onHelloCB_(Mercury::Channel* pChannel, const std::string& verInfo, 
-		const std::string& scriptVerInfo, COMPONENT_TYPE componentType)
+void Bots::onHelloCB_(Network::Channel* pChannel, const std::string& verInfo, 
+		const std::string& scriptVerInfo, const std::string& protocolMD5, const std::string& entityDefMD5, 
+		COMPONENT_TYPE componentType)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
 	{
-		pClient->onHelloCB_(pChannel, verInfo, scriptVerInfo, componentType);
+		pClient->onHelloCB_(pChannel, verInfo, scriptVerInfo, protocolMD5, entityDefMD5, componentType);
 	}
 }
 
 //-------------------------------------------------------------------------------------	
-void Bots::onVersionNotMatch(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onVersionNotMatch(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -514,7 +520,7 @@ void Bots::onVersionNotMatch(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------	
-void Bots::onScriptVersionNotMatch(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onScriptVersionNotMatch(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -524,7 +530,7 @@ void Bots::onScriptVersionNotMatch(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onCreateAccountResult(Mercury::Channel * pChannel, MemoryStream& s)
+void Bots::onCreateAccountResult(Network::Channel * pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -534,7 +540,7 @@ void Bots::onCreateAccountResult(Mercury::Channel * pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------	
-void Bots::onLoginSuccessfully(Mercury::Channel * pChannel, MemoryStream& s)
+void Bots::onLoginSuccessfully(Network::Channel * pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -544,7 +550,7 @@ void Bots::onLoginSuccessfully(Mercury::Channel * pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------	
-void Bots::onLoginFailed(Mercury::Channel * pChannel, MemoryStream& s)
+void Bots::onLoginFailed(Network::Channel * pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -554,7 +560,7 @@ void Bots::onLoginFailed(Mercury::Channel * pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------	
-void Bots::onLoginGatewayFailed(Mercury::Channel * pChannel, SERVER_ERROR_CODE failedcode)
+void Bots::onLoginGatewayFailed(Network::Channel * pChannel, SERVER_ERROR_CODE failedcode)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -564,17 +570,17 @@ void Bots::onLoginGatewayFailed(Mercury::Channel * pChannel, SERVER_ERROR_CODE f
 }
 
 //-------------------------------------------------------------------------------------	
-void Bots::onReLoginGatewaySuccessfully(Mercury::Channel * pChannel)
+void Bots::onReLoginGatewaySuccessfully(Network::Channel * pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
 	{
-		pClient->onReLoginGatewaySuccessfully(pChannel);
+		pClient->onReLoginGatewaySuccessfully(pChannel, s);
 	}
 }
 
 //-------------------------------------------------------------------------------------	
-void Bots::onCreatedProxies(Mercury::Channel * pChannel, 
+void Bots::onCreatedProxies(Network::Channel * pChannel, 
 								 uint64 rndUUID, ENTITY_ID eid, std::string& entityType)
 {
 	ClientObject* pClient = findClient(pChannel);
@@ -585,7 +591,7 @@ void Bots::onCreatedProxies(Mercury::Channel * pChannel,
 }
 
 //-------------------------------------------------------------------------------------	
-void Bots::onEntityEnterWorld(Mercury::Channel * pChannel, MemoryStream& s)
+void Bots::onEntityEnterWorld(Network::Channel * pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -595,7 +601,7 @@ void Bots::onEntityEnterWorld(Mercury::Channel * pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------	
-void Bots::onEntityLeaveWorld(Mercury::Channel * pChannel, ENTITY_ID eid)
+void Bots::onEntityLeaveWorld(Network::Channel * pChannel, ENTITY_ID eid)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -605,7 +611,7 @@ void Bots::onEntityLeaveWorld(Mercury::Channel * pChannel, ENTITY_ID eid)
 }
 
 //-------------------------------------------------------------------------------------	
-void Bots::onEntityLeaveWorldOptimized(Mercury::Channel * pChannel, MemoryStream& s)
+void Bots::onEntityLeaveWorldOptimized(Network::Channel * pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -615,7 +621,7 @@ void Bots::onEntityLeaveWorldOptimized(Mercury::Channel * pChannel, MemoryStream
 }
 
 //-------------------------------------------------------------------------------------	
-void Bots::onEntityEnterSpace(Mercury::Channel * pChannel, MemoryStream& s)
+void Bots::onEntityEnterSpace(Network::Channel * pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -625,7 +631,7 @@ void Bots::onEntityEnterSpace(Mercury::Channel * pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------	
-void Bots::onEntityLeaveSpace(Mercury::Channel * pChannel, ENTITY_ID eid)
+void Bots::onEntityLeaveSpace(Network::Channel * pChannel, ENTITY_ID eid)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -635,7 +641,7 @@ void Bots::onEntityLeaveSpace(Mercury::Channel * pChannel, ENTITY_ID eid)
 }
 
 //-------------------------------------------------------------------------------------	
-void Bots::onEntityDestroyed(Mercury::Channel * pChannel, ENTITY_ID eid)
+void Bots::onEntityDestroyed(Network::Channel * pChannel, ENTITY_ID eid)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -645,7 +651,7 @@ void Bots::onEntityDestroyed(Mercury::Channel * pChannel, ENTITY_ID eid)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onRemoteMethodCall(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Bots::onRemoteMethodCall(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -655,7 +661,7 @@ void Bots::onRemoteMethodCall(Mercury::Channel* pChannel, KBEngine::MemoryStream
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onRemoteMethodCallOptimized(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Bots::onRemoteMethodCallOptimized(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -665,7 +671,7 @@ void Bots::onRemoteMethodCallOptimized(Mercury::Channel* pChannel, KBEngine::Mem
 }
 
 //-------------------------------------------------------------------------------------	
-void Bots::onKicked(Mercury::Channel * pChannel, SERVER_ERROR_CODE failedcode)
+void Bots::onKicked(Network::Channel * pChannel, SERVER_ERROR_CODE failedcode)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -675,7 +681,7 @@ void Bots::onKicked(Mercury::Channel * pChannel, SERVER_ERROR_CODE failedcode)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdatePropertys(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdatePropertys(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -685,7 +691,7 @@ void Bots::onUpdatePropertys(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdatePropertysOptimized(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdatePropertysOptimized(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -695,7 +701,7 @@ void Bots::onUpdatePropertysOptimized(Mercury::Channel* pChannel, MemoryStream& 
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateBasePos(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateBasePos(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -705,7 +711,7 @@ void Bots::onUpdateBasePos(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateBasePosXZ(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateBasePosXZ(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -715,7 +721,7 @@ void Bots::onUpdateBasePosXZ(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onSetEntityPosAndDir(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onSetEntityPosAndDir(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -725,7 +731,7 @@ void Bots::onSetEntityPosAndDir(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -735,7 +741,7 @@ void Bots::onUpdateData(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_ypr(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_ypr(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -745,7 +751,7 @@ void Bots::onUpdateData_ypr(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_yp(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_yp(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -755,7 +761,7 @@ void Bots::onUpdateData_yp(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_yr(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_yr(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -765,7 +771,7 @@ void Bots::onUpdateData_yr(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_pr(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_pr(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -775,7 +781,7 @@ void Bots::onUpdateData_pr(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_y(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_y(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -785,7 +791,7 @@ void Bots::onUpdateData_y(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_p(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_p(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -795,7 +801,7 @@ void Bots::onUpdateData_p(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_r(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_r(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -805,7 +811,7 @@ void Bots::onUpdateData_r(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_xz(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_xz(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -815,7 +821,7 @@ void Bots::onUpdateData_xz(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_xz_ypr(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_xz_ypr(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -825,7 +831,7 @@ void Bots::onUpdateData_xz_ypr(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_xz_yp(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_xz_yp(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -835,7 +841,7 @@ void Bots::onUpdateData_xz_yp(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_xz_yr(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_xz_yr(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -845,7 +851,7 @@ void Bots::onUpdateData_xz_yr(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_xz_pr(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_xz_pr(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -855,7 +861,7 @@ void Bots::onUpdateData_xz_pr(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_xz_y(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_xz_y(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -865,7 +871,7 @@ void Bots::onUpdateData_xz_y(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_xz_p(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_xz_p(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -875,7 +881,7 @@ void Bots::onUpdateData_xz_p(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_xz_r(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_xz_r(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -885,7 +891,7 @@ void Bots::onUpdateData_xz_r(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_xyz(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_xyz(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -895,7 +901,7 @@ void Bots::onUpdateData_xyz(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_xyz_ypr(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_xyz_ypr(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -905,7 +911,7 @@ void Bots::onUpdateData_xyz_ypr(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_xyz_yp(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_xyz_yp(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -915,7 +921,7 @@ void Bots::onUpdateData_xyz_yp(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_xyz_yr(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_xyz_yr(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -925,7 +931,7 @@ void Bots::onUpdateData_xyz_yr(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_xyz_pr(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_xyz_pr(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -935,7 +941,7 @@ void Bots::onUpdateData_xyz_pr(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_xyz_y(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_xyz_y(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -945,7 +951,7 @@ void Bots::onUpdateData_xyz_y(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_xyz_p(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_xyz_p(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -955,7 +961,7 @@ void Bots::onUpdateData_xyz_p(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onUpdateData_xyz_r(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onUpdateData_xyz_r(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -965,7 +971,7 @@ void Bots::onUpdateData_xyz_r(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onStreamDataStarted(Mercury::Channel* pChannel, int16 id, uint32 datasize, std::string& descr)
+void Bots::onStreamDataStarted(Network::Channel* pChannel, int16 id, uint32 datasize, std::string& descr)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -975,7 +981,7 @@ void Bots::onStreamDataStarted(Mercury::Channel* pChannel, int16 id, uint32 data
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onStreamDataRecv(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::onStreamDataRecv(Network::Channel* pChannel, MemoryStream& s)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -985,7 +991,7 @@ void Bots::onStreamDataRecv(Mercury::Channel* pChannel, MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::onStreamDataCompleted(Mercury::Channel* pChannel, int16 id)
+void Bots::onStreamDataCompleted(Network::Channel* pChannel, int16 id)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -995,7 +1001,7 @@ void Bots::onStreamDataCompleted(Mercury::Channel* pChannel, int16 id)
 }
 
 //-------------------------------------------------------------------------------------	
-void Bots::setSpaceData(Mercury::Channel* pChannel, SPACE_ID spaceID, const std::string& key, const std::string& value)
+void Bots::setSpaceData(Network::Channel* pChannel, SPACE_ID spaceID, const std::string& key, const std::string& value)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -1005,7 +1011,7 @@ void Bots::setSpaceData(Mercury::Channel* pChannel, SPACE_ID spaceID, const std:
 }
 
 //-------------------------------------------------------------------------------------	
-void Bots::delSpaceData(Mercury::Channel* pChannel, SPACE_ID spaceID, const std::string& key)
+void Bots::delSpaceData(Network::Channel* pChannel, SPACE_ID spaceID, const std::string& key)
 {
 	ClientObject* pClient = findClient(pChannel);
 	if(pClient)
@@ -1015,7 +1021,7 @@ void Bots::delSpaceData(Mercury::Channel* pChannel, SPACE_ID spaceID, const std:
 }
 
 //-------------------------------------------------------------------------------------		
-void Bots::queryWatcher(Mercury::Channel* pChannel, MemoryStream& s)
+void Bots::queryWatcher(Network::Channel* pChannel, MemoryStream& s)
 {
 	AUTO_SCOPED_PROFILE("watchers");
 
@@ -1028,7 +1034,7 @@ void Bots::queryWatcher(Mercury::Channel* pChannel, MemoryStream& s)
 	MemoryStream::SmartPoolObjectPtr readStreamPtr1 = MemoryStream::createSmartPoolObj();
 	WatcherPaths::root().readChildPaths(path, path, readStreamPtr1.get()->get());
 
-	Mercury::Bundle bundle;
+	Network::Bundle bundle;
 	ConsoleInterface::ConsoleWatcherCBMessageHandler msgHandler;
 	bundle.newMessage(msgHandler);
 
@@ -1037,7 +1043,7 @@ void Bots::queryWatcher(Mercury::Channel* pChannel, MemoryStream& s)
 	bundle.append(readStreamPtr.get()->get());
 	bundle.send(networkInterface(), pChannel);
 
-	Mercury::Bundle bundle1;
+	Network::Bundle bundle1;
 	bundle1.newMessage(msgHandler);
 
 	type = 1;
@@ -1048,7 +1054,7 @@ void Bots::queryWatcher(Mercury::Channel* pChannel, MemoryStream& s)
 
 
 //-------------------------------------------------------------------------------------
-void Bots::startProfile(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Bots::startProfile(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	std::string profileName;
 	int8 profileType;
@@ -1060,7 +1066,7 @@ void Bots::startProfile(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void Bots::startProfile_(Mercury::Channel* pChannel, std::string profileName, int8 profileType, uint32 timelen)
+void Bots::startProfile_(Network::Channel* pChannel, std::string profileName, int8 profileType, uint32 timelen)
 {
 	switch(profileType)
 	{
@@ -1073,8 +1079,8 @@ void Bots::startProfile_(Mercury::Channel* pChannel, std::string profileName, in
 	case 2:	// eventprofile
 		new EventProfileHandler(this->networkInterface(), timelen, profileName, pChannel->addr());
 		break;
-	case 3:	// mercuryprofile
-		new MercuryProfileHandler(this->networkInterface(), timelen, profileName, pChannel->addr());
+	case 3:	// networkprofile
+		new NetworkProfileHandler(this->networkInterface(), timelen, profileName, pChannel->addr());
 		break;
 	default:
 		ERROR_MSG(fmt::format("Bots::startProfile_: type({}:{}) not support!\n", 

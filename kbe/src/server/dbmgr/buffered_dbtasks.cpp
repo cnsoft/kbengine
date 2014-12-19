@@ -17,12 +17,12 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
-#include "dbmgr.hpp"
-#include "buffered_dbtasks.hpp"
-#include "thread/threadpool.hpp"
-#include "thread/threadguard.hpp"
-#include "dbmgr_lib/db_interface.hpp"
-#include "server/serverconfig.hpp"
+#include "dbmgr.h"
+#include "buffered_dbtasks.h"
+#include "thread/threadpool.h"
+#include "thread/threadguard.h"
+#include "db_interface/db_interface.h"
+#include "server/serverconfig.h"
 
 namespace KBEngine{
 
@@ -109,7 +109,7 @@ EntityDBTask* Buffered_DBTasks::tryGetNextTask(EntityDBTask* pTask)
 
 	if(g_kbeSrvConfig.getDBMgr().debugDBMgr)
 	{
-		DEBUG_MSG(fmt::format("Buffered_DBTasks::tryGetNextTask(): finiTask(dbid={}, entityID={}\ndbidlist={}\nentityidlist={}\n", 
+		DEBUG_MSG(fmt::format("Buffered_DBTasks::tryGetNextTask(): finiTask(dbid={}, entityID={}\ndbidlist={}\nentityidlist={})\n", 
 			pTask->EntityDBTask_entityDBID(), pTask->EntityDBTask_entityID(), printBuffered_dbid_(), printBuffered_entityID_())); 
 	}
 

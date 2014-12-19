@@ -19,16 +19,16 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "html5_packet_filter.hpp"
+#include "html5_packet_filter.h"
 
-#include "network/bundle.hpp"
-#include "network/channel.hpp"
-#include "network/tcp_packet.hpp"
-#include "network/network_interface.hpp"
-#include "network/packet_receiver.hpp"
+#include "network/bundle.h"
+#include "network/channel.h"
+#include "network/tcp_packet.h"
+#include "network/network_interface.h"
+#include "network/packet_receiver.h"
 
 namespace KBEngine { 
-namespace Mercury
+namespace Network
 {
 
 uint64 hl64ton(uint64 host)   
@@ -137,7 +137,7 @@ Reason HTML5PacketFilter::send(NetworkInterface & networkInterface, Channel * pC
 		(*pRetTCPPacket) << payloadSize;
 	}
 
-	int space = pPacket->opsize() - pRetTCPPacket->fillfree();
+	int space = pPacket->length() - pRetTCPPacket->space();
 	if(space > 0)
 	{
 		WARNING_MSG(fmt::format("HTML5PacketFilter::send: no free space, buffer added:{}, total={}.\n",
@@ -146,7 +146,7 @@ Reason HTML5PacketFilter::send(NetworkInterface & networkInterface, Channel * pC
 		pRetTCPPacket->data_resize(pRetTCPPacket->size() + space);
 	}
 
-	(*pRetTCPPacket).append(pPacket->data() + pPacket->rpos(), pPacket->opsize());
+	(*pRetTCPPacket).append(pPacket->data() + pPacket->rpos(), pPacket->length());
 	
 	if(!pBundle->reuse())
 	{
@@ -177,7 +177,7 @@ Reason HTML5PacketFilter::recv(Channel * pChannel, PacketReceiver & receiver, Pa
 					if(pPacket->totalSize() == 1)
 					{
 						web_pFragmentDatasRemain_ -= 1;
-						pPacket->opfini();
+						pPacket->done();
 
 						pRetTCPPacket = pTCPPacket_;
 						pTCPPacket_ = NULL;
@@ -256,7 +256,7 @@ Reason HTML5PacketFilter::recv(Channel * pChannel, PacketReceiver & receiver, Pa
 				{
 					memcpy(&masks_[(basicSize_ == 126 ? 2 : 8) - web_pFragmentDatasRemain_], pPacket->data() + pPacket->rpos(), pPacket->totalSize());
 					web_pFragmentDatasRemain_ -= pPacket->totalSize();
-					pPacket->opfini();
+					pPacket->done();
 					pRetTCPPacket = pTCPPacket_;
 					pTCPPacket_ = NULL;
 					break;
@@ -277,7 +277,7 @@ Reason HTML5PacketFilter::recv(Channel * pChannel, PacketReceiver & receiver, Pa
 				{
 					memcpy(&masks_[4 - web_pFragmentDatasRemain_], pPacket->data() + pPacket->rpos(), pPacket->totalSize());
 					web_pFragmentDatasRemain_ -= pPacket->totalSize();
-					pPacket->opfini();
+					pPacket->done();
 					pRetTCPPacket = pTCPPacket_;
 					pTCPPacket_ = NULL;
 					break;
@@ -298,15 +298,15 @@ Reason HTML5PacketFilter::recv(Channel * pChannel, PacketReceiver & receiver, Pa
 			{
 				if(pPacket->totalSize() >= payloadSize_)
 				{
-					memcpy(pTCPPacket_->data() + pTCPPacket_->wpos(), pPacket->data() + pPacket->rpos(), (size_t)payloadSize_);
-					pTCPPacket_->wpos((int)pTCPPacket_->wpos() + (int)payloadSize_);
+					pTCPPacket_->append(pPacket->data() + pPacket->rpos(), (size_t)payloadSize_);
+
 					web_fragmentDatasFlag_ = FRAGMENT_DATA_BASIC_LENGTH;
 					web_pFragmentDatasRemain_ = 2;
 					pPacket->read_skip((size_t)payloadSize_);
 					uint64 startSize = payloadTotalSize_ - payloadSize_;
 					payloadSize_ = 0;
 
-					for(uint64 i=0; i<pTCPPacket_->opsize(); i++)
+					for(uint64 i=0; i<pTCPPacket_->length(); i++)
 					{
 						pTCPPacket_->data()[i] = (pTCPPacket_->data()[i] ^ masks_[(i + startSize) % 4]);
 					}
@@ -333,14 +333,14 @@ Reason HTML5PacketFilter::recv(Channel * pChannel, PacketReceiver & receiver, Pa
 				}
 				else
 				{
-					memcpy(pTCPPacket_->data() + pTCPPacket_->wpos(), pPacket->data() + pPacket->rpos(), pPacket->totalSize());
+					pTCPPacket_->append(pPacket->data() + pPacket->rpos(), pPacket->totalSize());
+
 					uint64 startSize = payloadTotalSize_ - payloadSize_;
 					payloadSize_ -= pPacket->totalSize();
-					pTCPPacket_->wpos(pTCPPacket_->wpos() + pPacket->totalSize());
-					pPacket->opfini();
+					pPacket->done();
 					pRetTCPPacket = pTCPPacket_;
 					
-					for(uint64 i=0; i<pTCPPacket_->opsize(); i++)
+					for(uint64 i=0; i<pTCPPacket_->length(); i++)
 					{
 						pTCPPacket_->data()[i] = (pTCPPacket_->data()[i] ^ masks_[(i + startSize) % 4]);
 					}

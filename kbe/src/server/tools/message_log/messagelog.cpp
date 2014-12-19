@@ -19,15 +19,15 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "messagelog.hpp"
-#include "messagelog_interface.hpp"
-#include "network/common.hpp"
-#include "network/tcp_packet.hpp"
-#include "network/udp_packet.hpp"
-#include "network/message_handler.hpp"
-#include "network/bundle_broadcast.hpp"
-#include "thread/threadpool.hpp"
-#include "server/componentbridge.hpp"
+#include "messagelog.h"
+#include "messagelog_interface.h"
+#include "network/common.h"
+#include "network/tcp_packet.h"
+#include "network/udp_packet.h"
+#include "network/message_handler.h"
+#include "network/bundle_broadcast.h"
+#include "thread/threadpool.h"
+#include "server/components.h"
 #include <sstream>
 
 namespace KBEngine{
@@ -36,11 +36,13 @@ ServerConfig g_serverConfig;
 KBE_SINGLETON_INIT(Messagelog);
 
 //-------------------------------------------------------------------------------------
-Messagelog::Messagelog(Mercury::EventDispatcher& dispatcher, 
-				 Mercury::NetworkInterface& ninterface, 
+Messagelog::Messagelog(Network::EventDispatcher& dispatcher, 
+				 Network::NetworkInterface& ninterface, 
 				 COMPONENT_TYPE componentType,
 				 COMPONENT_ID componentID):
-	ServerApp(dispatcher, ninterface, componentType, componentID)
+	ServerApp(dispatcher, ninterface, componentType, componentID),
+logWatchers_(),
+buffered_logs_()
 
 {
 }
@@ -88,7 +90,7 @@ bool Messagelog::inInitialize()
 bool Messagelog::initializeEnd()
 {
 	// 由于messagelog接收其他app的log，如果跟踪包输出将会非常卡。
-	Mercury::g_trace_packet = 0;
+	Network::g_trace_packet = 0;
 	return true;
 }
 
@@ -98,26 +100,36 @@ void Messagelog::finalise()
 	ServerApp::finalise();
 }
 
-//-------------------------------------------------------------------------------------
-void Messagelog::writeLog(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+//-------------------------------------------------------------------------------------	
+bool Messagelog::canShutdown()
 {
-	uint32 logtype;
-	COMPONENT_TYPE componentType = UNKNOWN_COMPONENT_TYPE;
-	COMPONENT_ID componentID = 0;
-	COMPONENT_ORDER componentOrder = 0;
-	int64 t;
-	GAME_TIME kbetime = 0;
-	std::string str;
-	std::stringstream logstream;
+	if(Components::getSingleton().getGameSrvComponentsSize() > 0)
+	{
+		INFO_MSG(fmt::format("Messagelog::canShutdown(): Waiting for components({}) destruction!\n", 
+			Components::getSingleton().getGameSrvComponentsSize()));
 
-	s >> logtype;
-	s >> componentType;
-	s >> componentID;
-	s >> componentOrder;
-	s >> t >> kbetime;
+		return false;
+	}
+
+	return true;
+}
+
+//-------------------------------------------------------------------------------------
+void Messagelog::writeLog(Network::Channel* pChannel, KBEngine::MemoryStream& s)
+{
+	LOG_ITEM* pLogItem = new LOG_ITEM();
+	std::string str;
+
+	s >> pLogItem->logtype;
+	s >> pLogItem->componentType;
+	s >> pLogItem->componentID;
+	s >> pLogItem->componentGlobalOrder;
+	s >> pLogItem->componentGroupOrder;
+	s >> pLogItem->t;
+	s >> pLogItem->kbetime;
 	s >> str;
 
-	time_t tt = static_cast<time_t>(t);	
+	time_t tt = static_cast<time_t>(pLogItem->t);	
     tm* aTm = localtime(&tt);
     //       YYYY   year
     //       MM     month (2 digits 01-12)
@@ -133,40 +145,63 @@ void Messagelog::writeLog(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
 	}
 
 	char timebuf[MAX_BUF];
-    kbe_snprintf(timebuf, MAX_BUF, " [%-4d-%02d-%02d %02d:%02d:%02d %02d] ", aTm->tm_year+1900, aTm->tm_mon+1, 
-		aTm->tm_mday, aTm->tm_hour, aTm->tm_min, aTm->tm_sec, kbetime);
 
-	logstream << KBELOG_TYPE_NAME_EX(logtype);
-	logstream << " ";
-	logstream << COMPONENT_NAME_EX_1(componentType);
-	logstream << " ";
-	logstream << componentID;
-	logstream << " ";
-	logstream << (int)componentOrder;
-	logstream << timebuf;
-	logstream << "- ";
-	logstream << str;
-	DebugHelper::getSingleton().changeLogger(COMPONENT_NAME_EX(componentType));
-	PRINT_MSG(logstream.str());
+	pLogItem->logstream << KBELOG_TYPE_NAME_EX(pLogItem->logtype);
+	pLogItem->logstream << " ";
+	pLogItem->logstream << COMPONENT_NAME_EX_2(pLogItem->componentType);
+
+    kbe_snprintf(timebuf, MAX_BUF, "%02d", (int)pLogItem->componentGroupOrder);
+	pLogItem->logstream << timebuf;
+	pLogItem->logstream << " ";
+
+    kbe_snprintf(timebuf, MAX_BUF, " [%-4d-%02d-%02d %02d:%02d:%02d %03d] ", aTm->tm_year+1900, aTm->tm_mon+1, 
+		aTm->tm_mday, aTm->tm_hour, aTm->tm_min, aTm->tm_sec, pLogItem->kbetime);
+	pLogItem->logstream << timebuf;
+
+	pLogItem->logstream << "- ";
+	pLogItem->logstream << str;
+
+	DebugHelper::getSingleton().changeLogger(COMPONENT_NAME_EX(pLogItem->componentType));
+	PRINT_MSG(pLogItem->logstream.str());
 	DebugHelper::getSingleton().changeLogger("default");
 
 	LOG_WATCHERS::iterator iter = logWatchers_.begin();
 	for(; iter != logWatchers_.end(); iter++)
 	{
-		iter->second.onMessage(logtype, componentType, componentID, componentOrder, t, kbetime, str, logstream);
+		iter->second.onMessage(pLogItem);
+	}
+
+	// 缓存一部分log，提供工具查看log时能快速获取初始上下文
+	buffered_logs_.push_back(pLogItem);
+	if(buffered_logs_.size() > 64)
+	{
+		pLogItem = buffered_logs_.front();
+		buffered_logs_.pop_front();
+		delete pLogItem;
 	}
 }
 
 //-------------------------------------------------------------------------------------
-void Messagelog::registerLogWatcher(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Messagelog::sendInitLogs(LogWatcher& logWatcher)
+{
+	std::deque<LOG_ITEM*>::iterator iter = buffered_logs_.begin();
+	for(; iter != buffered_logs_.end(); iter++)
+	{
+		logWatcher.onMessage((*iter));
+	}
+}
+
+//-------------------------------------------------------------------------------------
+void Messagelog::registerLogWatcher(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	LogWatcher* pLogwatcher = &logWatchers_[pChannel->addr()];
-	if(!pLogwatcher->loadFromStream(&s))
+	if(!pLogwatcher->createFromStream(&s))
 	{
 		ERROR_MSG(fmt::format("Messagelog::registerLogWatcher: addr={} is failed!\n",
 			pChannel->addr().c_str()));
 
 		logWatchers_.erase(pChannel->addr());
+		s.done();
 		return;
 	}
 
@@ -174,6 +209,36 @@ void Messagelog::registerLogWatcher(Mercury::Channel* pChannel, KBEngine::Memory
 
 	INFO_MSG(fmt::format("Messagelog::registerLogWatcher: addr={0} is successfully!\n",
 		pChannel->addr().c_str()));
+
+	bool first;
+	s >> first;
+
+	if(first)
+		sendInitLogs(*pLogwatcher);
+}
+
+//-------------------------------------------------------------------------------------
+void Messagelog::deregisterLogWatcher(Network::Channel* pChannel, KBEngine::MemoryStream& s)
+{
+	logWatchers_.erase(pChannel->addr());
+
+	INFO_MSG(fmt::format("Messagelog::deregisterLogWatcher: addr={0} is successfully!\n",
+		pChannel->addr().c_str()));
+}
+
+//-------------------------------------------------------------------------------------
+void Messagelog::updateLogWatcherSetting(Network::Channel* pChannel, KBEngine::MemoryStream& s)
+{
+	LogWatcher* pLogwatcher = &logWatchers_[pChannel->addr()];
+	if(!pLogwatcher->updateSetting(&s))
+	{
+		ERROR_MSG(fmt::format("Messagelog::updateLogWatcherSetting: addr={} is failed!\n",
+			pChannel->addr().c_str()));
+
+		logWatchers_.erase(pChannel->addr());
+	}
+
+	s.done();
 }
 
 //-------------------------------------------------------------------------------------

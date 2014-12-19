@@ -18,19 +18,21 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "blob.hpp"
-#include "datatype.hpp"
-#include "datatypes.hpp"
-#include "entitydef.hpp"
-#include "fixeddict.hpp"
-#include "fixedarray.hpp"
-#include "pyscript/vector2.hpp"
-#include "pyscript/vector3.hpp"
-#include "pyscript/vector4.hpp"
-#include "pyscript/copy.hpp"
+#include "blob.h"
+#include "datatype.h"
+#include "datatypes.h"
+#include "entitydef.h"
+#include "fixeddict.h"
+#include "fixedarray.h"
+#include "entity_mailbox.h"
+#include "scriptdef_module.h"
+#include "pyscript/vector2.h"
+#include "pyscript/vector3.h"
+#include "pyscript/vector4.h"
+#include "pyscript/copy.h"
 
 #ifndef CODE_INLINE
-#include "datatype.ipp"
+#include "datatype.inl"
 #endif
 
 namespace KBEngine{
@@ -803,11 +805,8 @@ PyObject* StringType::parseDefaultStr(std::string defaultVal)
 void StringType::addToStream(MemoryStream* mstream, PyObject* pyValue)
 {
 	wchar_t* PyUnicode_AsWideCharStringRet0 = PyUnicode_AsWideCharString(pyValue, NULL);
-	char* ccattr = strutil::wchar2char(PyUnicode_AsWideCharStringRet0);
+	strutil::wchar2char(PyUnicode_AsWideCharStringRet0, mstream);
 	PyMem_Free(PyUnicode_AsWideCharStringRet0);
-
-	(*mstream) << ccattr;
-	free(ccattr);
 }
 
 //-------------------------------------------------------------------------------------
@@ -1180,10 +1179,26 @@ bool MailboxType::isSameType(PyObject* pyValue)
 		return false;
 	}
 
-	bool ret = script::Pickler::pickle(pyValue).empty();
-	if(ret)
-		OUT_TYPE_ERROR("MAILBOX");
-	return !ret;
+	if(!(PyObject_TypeCheck(pyValue, EntityMailbox::getScriptType()) || pyValue == Py_None))
+	{
+		PyTypeObject* type = script::ScriptObject::getScriptObjectType("Entity");
+		if(type == NULL)
+		{
+			type = script::ScriptObject::getScriptObjectType("Base");
+			if(type && !(PyObject_IsInstance(pyValue, (PyObject *)type)))
+			{
+				OUT_TYPE_ERROR("MAILBOX");
+				return false;
+			}
+		}
+		else if(!(PyObject_IsInstance(pyValue, (PyObject *)type)))
+		{
+			OUT_TYPE_ERROR("MAILBOX");
+			return false;
+		}
+	}
+
+	return true;
 }
 
 //-------------------------------------------------------------------------------------
@@ -1195,23 +1210,104 @@ PyObject* MailboxType::parseDefaultStr(std::string defaultVal)
 //-------------------------------------------------------------------------------------
 void MailboxType::addToStream(MemoryStream* mstream, PyObject* pyValue)
 {
-	mstream->appendBlob(script::Pickler::pickle(pyValue));
+	COMPONENT_ID cid = 0;
+	ENTITY_ID id = 0;
+	uint16 type = 0;
+	ENTITY_SCRIPT_UID utype;
+
+	const char types[2][10] = {
+		"Entity",
+		"Base"
+	};
+
+	if(pyValue != Py_None)
+	{
+		for(int i=0; i<2; i++)
+		{
+			PyTypeObject* stype = script::ScriptObject::getScriptObjectType(types[i]);
+			{
+				if(stype == NULL)
+					continue;
+
+				// 是否是一个entity?
+				if(PyObject_IsInstance(pyValue, (PyObject *)stype))
+				{
+					PyObject* pyid = PyObject_GetAttrString(pyValue, "id");
+					id = PyLong_AsLong(pyid);
+					Py_DECREF(pyid);
+
+					cid = g_componentID;
+
+					if(g_componentType == BASEAPP_TYPE)
+						type = (uint16)MAILBOX_TYPE_BASE;
+					else if(g_componentType == CELLAPP_TYPE)
+						type = (uint16)MAILBOX_TYPE_CELL;
+					else
+						type = (uint16)MAILBOX_TYPE_CLIENT;
+
+					PyObject* pyClass = PyObject_GetAttrString(pyValue, "__class__");
+					PyObject* pyClassName = PyObject_GetAttrString(pyClass, "__name__");
+					wchar_t* PyUnicode_AsWideCharStringRet0 = PyUnicode_AsWideCharString(pyClassName, NULL);
+					char* ccattr = strutil::wchar2char(PyUnicode_AsWideCharStringRet0);
+
+					PyMem_Free(PyUnicode_AsWideCharStringRet0);
+					Py_DECREF(pyClass);
+					Py_DECREF(pyClassName);
+
+					ScriptDefModule* pScriptDefModule = EntityDef::findScriptModule(ccattr);
+					free(ccattr);
+
+					utype = pScriptDefModule->getUType();
+					break;
+				}
+			}
+		}
+		
+		// 只能是mailbox
+		if(id == 0)
+		{
+			EntityMailboxAbstract* pEntityMailboxAbstract = static_cast<EntityMailboxAbstract*>(pyValue);
+			cid = pEntityMailboxAbstract->componentID();
+			id = pEntityMailboxAbstract->id();
+			type = static_cast<int16>(pEntityMailboxAbstract->type());;
+			utype = pEntityMailboxAbstract->utype();
+		}
+	}
+
+	(*mstream) << id;
+	(*mstream) << cid;
+	(*mstream) << type;
+	(*mstream) << utype;
 }
 
 //-------------------------------------------------------------------------------------
 PyObject* MailboxType::createFromStream(MemoryStream* mstream)
 {
-	std::string val = "";
 	if(mstream)
 	{
-		mstream->readBlob(val);
-	}
-	else
-	{
-		S_Return;
+		COMPONENT_ID cid = 0;
+		ENTITY_ID id = 0;
+		uint16 type;
+		ENTITY_SCRIPT_UID utype;
+
+		(*mstream) >> id >> cid >> type >> utype;
+
+		// 允许传输Py_None
+		if(id > 0)
+		{
+			PyObject* entity = EntityMailbox::tryGetEntity(cid, id);
+			if(entity != NULL)
+			{
+				Py_INCREF(entity);
+				return entity;
+			}
+
+			return new EntityMailbox(EntityDef::findScriptModule(utype), NULL, cid, 
+							id, (ENTITY_MAILBOX_TYPE)type);
+		}
 	}
 
-	return script::Pickler::unpickle(val);
+	Py_RETURN_NONE;
 }
 
 //-------------------------------------------------------------------------------------
@@ -1400,10 +1496,10 @@ PyObject* FixedArrayType::createFromStreamEx(MemoryStream* mstream, bool onlyPer
 		std::vector<PyObject*>& vals = arr->getValues();
 		for(ArraySize i=0; i<size; i++)
 		{
-			if(mstream->opsize() == 0)
+			if(mstream->length() == 0)
 			{
-				ERROR_MSG(fmt::format("FixedArrayType::createFromStream: invalid(size={}), stream no space!\n",
-					size));
+				ERROR_MSG(fmt::format("FixedArrayType::createFromStream: {} invalid(size={}), stream no space!\n",
+					aliasName(), size));
 
 				break;
 			}
@@ -1423,7 +1519,9 @@ PyObject* FixedArrayType::createFromStreamEx(MemoryStream* mstream, bool onlyPer
 			}
 			else
 			{
-				ERROR_MSG("FixedArrayType::createFromStream: pyVal is NULL, create is error!\n");
+				ERROR_MSG(fmt::format("FixedArrayType::createFromStream: {}, pyVal is NULL! size={}\n", 
+					aliasName(), size));
+
 				break;
 			}
 		}

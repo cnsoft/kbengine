@@ -19,23 +19,23 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "error_reporter.hpp"
+#include "error_reporter.h"
 #ifndef CODE_INLINE
-#include "error_reporter.ipp"
+#include "error_reporter.inl"
 #endif
 
-#include "network/address.hpp"
-#include "network/event_dispatcher.hpp"
-#include "network/endpoint.hpp"
+#include "network/address.h"
+#include "network/event_dispatcher.h"
+#include "network/endpoint.h"
 
 namespace KBEngine { 
-namespace Mercury
+namespace Network
 {
 
 const uint ErrorReporter::ERROR_REPORT_MIN_PERIOD_MS = 2000; // 2 seconds
 
 /**
- *	The nominal maximum time that a report count for a Mercury address and
+ *	The nominal maximum time that a report count for a Network address and
  *	error is kept after the last raising of the error.
  */
 const uint ErrorReporter::ERROR_REPORT_COUNT_MAX_LIFETIME_MS = 10000; // 10 seconds

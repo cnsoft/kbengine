@@ -18,25 +18,25 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "baseapp.hpp"
-#include "sync_entitystreamtemplate_handler.hpp"
-#include "entitydef/scriptdef_module.hpp"
-#include "entitydef/entity_macro.hpp"
-#include "network/fixed_messages.hpp"
-#include "math/math.hpp"
-#include "network/bundle.hpp"
-#include "network/channel.hpp"
+#include "baseapp.h"
+#include "sync_entitystreamtemplate_handler.h"
+#include "entitydef/scriptdef_module.h"
+#include "entitydef/entity_macro.h"
+#include "network/fixed_messages.h"
+#include "math/math.h"
+#include "network/bundle.h"
+#include "network/channel.h"
 
-#include "../../server/dbmgr/dbmgr_interface.hpp"
+#include "../../server/dbmgr/dbmgr_interface.h"
 
 namespace KBEngine{	
 
 //-------------------------------------------------------------------------------------
-SyncEntityStreamTemplateHandler::SyncEntityStreamTemplateHandler(Mercury::NetworkInterface & networkInterface):
+SyncEntityStreamTemplateHandler::SyncEntityStreamTemplateHandler(Network::NetworkInterface & networkInterface):
 Task(),
 networkInterface_(networkInterface)
 {
-	networkInterface.mainDispatcher().addFrequentTask(this);
+	networkInterface.dispatcher().addFrequentTask(this);
 
 	MemoryStream accountDefMemoryStream;
 
@@ -74,7 +74,7 @@ SyncEntityStreamTemplateHandler::~SyncEntityStreamTemplateHandler()
 bool SyncEntityStreamTemplateHandler::process()
 {
 	Components::COMPONENTS& cts = Components::getSingleton().getComponents(DBMGR_TYPE);
-	Mercury::Channel* pChannel = NULL;
+	Network::Channel* pChannel = NULL;
 
 	if(cts.size() > 0)
 	{
@@ -115,7 +115,7 @@ bool SyncEntityStreamTemplateHandler::process()
 		propertyDescription->addPersistentToStream(&accountDefMemoryStream, NULL);
 	}
 
-	Mercury::Bundle::SmartPoolObjectPtr bundleptr = Mercury::Bundle::createSmartPoolObj();
+	Network::Bundle::SmartPoolObjectPtr bundleptr = Network::Bundle::createSmartPoolObj();
 
 	(*bundleptr)->newMessage(DbmgrInterface::syncEntityStreamTemplate);
 	(*bundleptr)->append(accountDefMemoryStream);

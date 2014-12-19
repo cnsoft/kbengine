@@ -18,11 +18,11 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "websocket_protocol.hpp"
-#include "cstdkbe/memorystream.hpp"
-#include "network/channel.hpp"
-#include "cstdkbe/base64.hpp"
-#include "cstdkbe/sha1.hpp"
+#include "websocket_protocol.h"
+#include "common/memorystream.h"
+#include "network/channel.h"
+#include "common/base64.h"
+#include "common/sha1.h"
 
 #if KBE_PLATFORM == PLATFORM_WIN32
 #ifdef _DEBUG
@@ -80,7 +80,7 @@ bool WebSocketProtocol::isWebSocketProtocol(MemoryStream* s)
 }
 
 //-------------------------------------------------------------------------------------
-bool WebSocketProtocol::handshake(Mercury::Channel* pChannel, MemoryStream* s)
+bool WebSocketProtocol::handshake(Network::Channel* pChannel, MemoryStream* s)
 {
 	KBE_ASSERT(s != NULL);
 
@@ -182,7 +182,7 @@ bool WebSocketProtocol::handshake(Mercury::Channel* pChannel, MemoryStream* s)
 	ackHandshake += "/WebManagerSocket\r\n";
 	ackHandshake += "WebSocket-Protocol:WebManagerSocket\r\n\r\n";
 
-	Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 	(*pBundle) << ackHandshake;
 	(*pBundle).pCurrPacket()->wpos((*pBundle).pCurrPacket()->wpos() - 1);
 	pChannel->send(pBundle);

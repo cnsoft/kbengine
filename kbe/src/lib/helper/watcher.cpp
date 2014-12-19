@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "watcher.hpp"
-#include "resmgr/resmgr.hpp"
+#include "watcher.h"
+#include "resmgr/resmgr.h"
 
 namespace KBEngine{
 WatcherPaths* pWatcherPaths = NULL;
@@ -31,7 +31,6 @@ WatcherObject::WatcherObject(std::string path):
   name_(),
   strval_(),
   id_(0),
-  s_(),
   numWitness_(0)
 {
 	std::string::size_type fi = path.find_first_of('/');

@@ -19,10 +19,10 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "sequence.hpp"
+#include "sequence.h"
 
 #ifndef CODE_INLINE
-#include "sequence.ipp"
+#include "sequence.inl"
 #endif
 
 namespace KBEngine{ namespace script{
@@ -72,9 +72,15 @@ Sequence::~Sequence()
 //-------------------------------------------------------------------------------------
 bool Sequence::isSameType(PyObject* pyValue)
 {
+	if(pyValue == NULL)
+	{
+		return false;
+	}
+
 	return true;
 }
 
+//-------------------------------------------------------------------------------------
 bool Sequence::isSameItemType(PyObject* pyValue)
 {
 	return true;

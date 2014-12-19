@@ -19,18 +19,18 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "cellappmgr.hpp"
-#include "cellappmgr_interface.hpp"
-#include "network/common.hpp"
-#include "network/tcp_packet.hpp"
-#include "network/udp_packet.hpp"
-#include "network/message_handler.hpp"
-#include "thread/threadpool.hpp"
-#include "server/componentbridge.hpp"
+#include "cellappmgr.h"
+#include "cellappmgr_interface.h"
+#include "network/common.h"
+#include "network/tcp_packet.h"
+#include "network/udp_packet.h"
+#include "network/message_handler.h"
+#include "thread/threadpool.h"
+#include "server/components.h"
 
-#include "../../server/baseapp/baseapp_interface.hpp"
-#include "../../server/cellapp/cellapp_interface.hpp"
-#include "../../server/dbmgr/dbmgr_interface.hpp"
+#include "../../server/baseapp/baseapp_interface.h"
+#include "../../server/cellapp/cellapp_interface.h"
+#include "../../server/dbmgr/dbmgr_interface.h"
 
 namespace KBEngine{
 	
@@ -38,8 +38,8 @@ ServerConfig g_serverConfig;
 KBE_SINGLETON_INIT(Cellappmgr);
 
 //-------------------------------------------------------------------------------------
-Cellappmgr::Cellappmgr(Mercury::EventDispatcher& dispatcher, 
-			 Mercury::NetworkInterface& ninterface, 
+Cellappmgr::Cellappmgr(Network::EventDispatcher& dispatcher, 
+			 Network::NetworkInterface& ninterface, 
 			 COMPONENT_TYPE componentType,
 			 COMPONENT_ID componentID):
 	ServerApp(dispatcher, ninterface, componentType, componentID),
@@ -77,7 +77,7 @@ void Cellappmgr::handleTimeout(TimerHandle handle, void * arg)
 }
 
 //-------------------------------------------------------------------------------------
-void Cellappmgr::onChannelDeregister(Mercury::Channel * pChannel)
+void Cellappmgr::onChannelDeregister(Network::Channel * pChannel)
 {
 	// 如果是app死亡了
 	if(pChannel->isInternal())
@@ -145,7 +145,7 @@ void Cellappmgr::finalise()
 }
 
 //-------------------------------------------------------------------------------------
-void Cellappmgr::forwardMessage(Mercury::Channel* pChannel, MemoryStream& s)
+void Cellappmgr::forwardMessage(Network::Channel* pChannel, MemoryStream& s)
 {
 	COMPONENT_ID sender_componentID, forward_componentID;
 
@@ -153,10 +153,10 @@ void Cellappmgr::forwardMessage(Mercury::Channel* pChannel, MemoryStream& s)
 	Components::ComponentInfos* cinfos = Components::getSingleton().findComponent(forward_componentID);
 	KBE_ASSERT(cinfos != NULL && cinfos->pChannel != NULL);
 
-	Mercury::Bundle bundle;
-	bundle.append((char*)s.data() + s.rpos(), s.opsize());
+	Network::Bundle bundle;
+	bundle.append((char*)s.data() + s.rpos(), s.length());
 	bundle.send(this->networkInterface(), cinfos->pChannel);
-	s.opfini();
+	s.done();
 }
 
 //-------------------------------------------------------------------------------------
@@ -186,7 +186,7 @@ COMPONENT_ID Cellappmgr::findFreeCellapp(void)
 }
 
 //-------------------------------------------------------------------------------------
-void Cellappmgr::reqCreateInNewSpace(Mercury::Channel* pChannel, MemoryStream& s) 
+void Cellappmgr::reqCreateInNewSpace(Network::Channel* pChannel, MemoryStream& s) 
 {
 	std::string entityType;
 	ENTITY_ID id;
@@ -198,11 +198,7 @@ void Cellappmgr::reqCreateInNewSpace(Mercury::Channel* pChannel, MemoryStream& s
 
 	static SPACE_ID spaceID = 1;
 
-	Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
-	ForwardItem* pFI = new ForwardItem();
-	pFI->pHandler = NULL;
-	
-	pFI->pBundle = pBundle;
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 	(*pBundle).newMessage(CellappInterface::onCreateInNewSpaceFromBaseapp);
 	(*pBundle) << entityType;
 	(*pBundle) << id;
@@ -210,7 +206,7 @@ void Cellappmgr::reqCreateInNewSpace(Mercury::Channel* pChannel, MemoryStream& s
 	(*pBundle) << componentID;
 
 	(*pBundle).append(&s);
-	s.opfini();
+	s.done();
 
 	DEBUG_MSG(fmt::format("Cellappmgr::reqCreateInNewSpace: entityType={0}, entityID={1}, componentID={2}.\n",
 		entityType, id, componentID));
@@ -223,19 +219,21 @@ void Cellappmgr::reqCreateInNewSpace(Mercury::Channel* pChannel, MemoryStream& s
 	if(cinfos == NULL || cinfos->pChannel == NULL)
 	{
 		WARNING_MSG("Cellappmgr::reqCreateInNewSpace: not found cellapp, message is buffered.\n");
+		ForwardItem* pFI = new ForwardItem();
+		pFI->pHandler = NULL;
+		pFI->pBundle = pBundle;
 		forward_cellapp_messagebuffer_.push(pFI);
 		return;
 	}
 	else
 	{
 		(*pBundle).send(this->networkInterface(), cinfos->pChannel);
-		Mercury::Bundle::ObjPool().reclaimObject(pBundle);
-		SAFE_RELEASE(pFI);
+		Network::Bundle::ObjPool().reclaimObject(pBundle);
 	}
 }
 
 //-------------------------------------------------------------------------------------
-void Cellappmgr::reqRestoreSpaceInCell(Mercury::Channel* pChannel, MemoryStream& s) 
+void Cellappmgr::reqRestoreSpaceInCell(Network::Channel* pChannel, MemoryStream& s) 
 {
 	std::string entityType;
 	ENTITY_ID id;
@@ -247,11 +245,7 @@ void Cellappmgr::reqRestoreSpaceInCell(Mercury::Channel* pChannel, MemoryStream&
 	s >> componentID;
 	s >> spaceID;
 
-	Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
-	ForwardItem* pFI = new ForwardItem();
-	pFI->pHandler = NULL;
-	
-	pFI->pBundle = pBundle;
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 	(*pBundle).newMessage(CellappInterface::onRestoreSpaceInCellFromBaseapp);
 	(*pBundle) << entityType;
 	(*pBundle) << id;
@@ -259,7 +253,7 @@ void Cellappmgr::reqRestoreSpaceInCell(Mercury::Channel* pChannel, MemoryStream&
 	(*pBundle) << componentID;
 
 	(*pBundle).append(&s);
-	s.opfini();
+	s.done();
 
 	DEBUG_MSG(fmt::format("Cellappmgr::reqRestoreSpaceInCell: entityType={0}, entityID={1}, componentID={2}, spaceID={3}.\n",
 		entityType, id, componentID, spaceID));
@@ -272,19 +266,21 @@ void Cellappmgr::reqRestoreSpaceInCell(Mercury::Channel* pChannel, MemoryStream&
 	if(cinfos == NULL || cinfos->pChannel == NULL)
 	{
 		WARNING_MSG("Cellappmgr::reqRestoreSpaceInCell: not found cellapp, message is buffered.\n");
+		ForwardItem* pFI = new ForwardItem();
+		pFI->pHandler = NULL;
+		pFI->pBundle = pBundle;
 		forward_cellapp_messagebuffer_.push(pFI);
 		return;
 	}
 	else
 	{
 		(*pBundle).send(this->networkInterface(), cinfos->pChannel);
-		Mercury::Bundle::ObjPool().reclaimObject(pBundle);
-		SAFE_RELEASE(pFI);
+		Network::Bundle::ObjPool().reclaimObject(pBundle);
 	}
 }
 
 //-------------------------------------------------------------------------------------
-void Cellappmgr::updateCellapp(Mercury::Channel* pChannel, COMPONENT_ID componentID, float load)
+void Cellappmgr::updateCellapp(Network::Channel* pChannel, COMPONENT_ID componentID, float load)
 {
 	// updateBestCellapp();
 }

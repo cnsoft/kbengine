@@ -53,13 +53,12 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>../python/PC;../python/Include;../dependencies/g3dlite;../;../../common;../../lib/dependencies/log4cxx/include;../../lib/dependencies;../../lib/dependencies/openssl/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../python/PC;../python/Include;../dependencies/g3dlite;../;../../common;../../lib/dependencies/log4cxx/src/main/include;../../lib/dependencies;../../lib/dependencies/openssl/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>KBE_CLIENT;USE_OPENSSL;ENABLE_WATCHERS;WIN32;_DEBUG;_LIB;CODE_INLINE;KBE_USE_ASSERTS;LOG4CXX_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MinimalRebuild>true</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <PrecompiledHeader>
-      </PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
       <ObjectFileName>$(IntDir)</ObjectFileName>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).pdb</ProgramDataBaseFileName>
@@ -75,12 +74,11 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <AdditionalIncludeDirectories>../python/PC;../python/Include;../dependencies/g3dlite;../;../../common;../../lib/dependencies/log4cxx/include;../../lib/dependencies;../../lib/dependencies/openssl/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../python/PC;../python/Include;../dependencies/g3dlite;../;../../common;../../lib/dependencies/log4cxx/src/main/include;../../lib/dependencies;../../lib/dependencies/openssl/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>KBE_CLIENT;USE_OPENSSL;ENABLE_WATCHERS;WIN32;NDEBUG;_LIB;CODE_INLINE;KBE_USE_ASSERTS;LOG4CXX_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <PrecompiledHeader>
-      </PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
       <ObjectFileName>$(IntDir)</ObjectFileName>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).pdb</ProgramDataBaseFileName>
@@ -104,25 +102,25 @@
     <ClCompile Include="script_callbacks.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="client_interface.hpp" />
-    <ClInclude Include="client_interface_macros.hpp" />
-    <ClInclude Include="clientapp.hpp" />
-    <ClInclude Include="clientobjectbase.hpp" />
-    <ClInclude Include="common.hpp" />
-    <ClInclude Include="config.hpp" />
-    <ClInclude Include="entity.hpp" />
-    <ClInclude Include="entity_aspect.hpp" />
-    <ClInclude Include="event.hpp" />
-    <ClInclude Include="kbemain.hpp" />
-    <ClInclude Include="profile.hpp" />
-    <ClInclude Include="script_callbacks.hpp" />
+    <ClInclude Include="client_interface.h" />
+    <ClInclude Include="client_interface_macros.h" />
+    <ClInclude Include="clientapp.h" />
+    <ClInclude Include="clientobjectbase.h" />
+    <ClInclude Include="common.h" />
+    <ClInclude Include="config.h" />
+    <ClInclude Include="entity.h" />
+    <ClInclude Include="entity_aspect.h" />
+    <ClInclude Include="event.h" />
+    <ClInclude Include="kbemain.h" />
+    <ClInclude Include="profile.h" />
+    <ClInclude Include="script_callbacks.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="entity.ipp" />
+    <None Include="entity.inl" />
     <None Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\cstdkbe\cstdkbe.vcxproj">
+    <ProjectReference Include="..\common\common.vcxproj">
       <Project>{a04109a7-46c9-42f9-ab29-8e3d84450172}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>

@@ -18,8 +18,9 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "fixeddict.hpp"
-#include "datatypes.hpp"
+#include "fixeddict.h"
+#include "datatypes.h"
+#include "pyscript/py_gc.h"
 
 namespace KBEngine{ 
 
@@ -31,13 +32,28 @@ PyMappingMethods FixedDict::mappingMethods =
 	(objobjargproc)FixedDict::mp_ass_subscript		// mp_ass_subscript
 };
 
+// ²Î¿¼ objects/dictobject.c
+// Hack to implement "key in dict"
+PySequenceMethods FixedDict::mappingSequenceMethods = 
+{
+    0,											/* sq_length */
+    0,											/* sq_concat */
+    0,											/* sq_repeat */
+    0,											/* sq_item */
+    0,											/* sq_slice */
+    0,											/* sq_ass_item */
+    0,											/* sq_ass_slice */
+    PyMapping_HasKey,							/* sq_contains */
+    0,											/* sq_inplace_concat */
+    0,											/* sq_inplace_repeat */
+};
 
 SCRIPT_METHOD_DECLARE_BEGIN(FixedDict)
-SCRIPT_METHOD_DECLARE("__reduce_ex__",	reduce_ex__,		METH_VARARGS, 0)
-SCRIPT_METHOD_DECLARE("has_key",		has_key,			METH_VARARGS, 0)
-SCRIPT_METHOD_DECLARE("keys",			keys,				METH_VARARGS, 0)
-SCRIPT_METHOD_DECLARE("values",			values,				METH_VARARGS, 0)
-SCRIPT_METHOD_DECLARE("items",			items,				METH_VARARGS, 0)
+SCRIPT_METHOD_DECLARE("__reduce_ex__",				reduce_ex__,			METH_VARARGS,		0)
+SCRIPT_METHOD_DECLARE("has_key",					has_key,				METH_VARARGS,		0)
+SCRIPT_METHOD_DECLARE("keys",						keys,					METH_VARARGS,		0)
+SCRIPT_METHOD_DECLARE("values",						values,					METH_VARARGS,		0)
+SCRIPT_METHOD_DECLARE("items",						items,					METH_VARARGS,		0)
 SCRIPT_METHOD_DECLARE_END()
 
 
@@ -46,7 +62,7 @@ SCRIPT_MEMBER_DECLARE_END()
 
 SCRIPT_GETSET_DECLARE_BEGIN(FixedDict)
 SCRIPT_GETSET_DECLARE_END()
-SCRIPT_INIT(FixedDict, 0, 0, &FixedDict::mappingMethods, 0, 0)	
+SCRIPT_INIT(FixedDict, 0, &FixedDict::mappingSequenceMethods, &FixedDict::mappingMethods, 0, 0)	
 	
 //-------------------------------------------------------------------------------------
 FixedDict::FixedDict(DataType* dataType, std::string& strDictInitData):
@@ -55,6 +71,8 @@ Map(getScriptType(), false)
 	_dataType = static_cast<FixedDictType*>(dataType);
 	_dataType->incRef();
 	initialize(strDictInitData);
+
+	script::PyGC::incTracing("FixedDict");
 
 //	DEBUG_MSG(fmt::format("FixedDict::FixedDict(1): {:p}---{}\n", (void*)this,
 //		wchar2char(PyUnicode_AsWideCharString(PyObject_Str(getDictObject()), NULL))));
@@ -68,6 +86,8 @@ Map(getScriptType(), false)
 	_dataType->incRef();
 	initialize(pyDictInitData);
 
+	script::PyGC::incTracing("FixedDict");
+
 //	DEBUG_MSG(fmt::format("FixedDict::FixedDict(2): {:p}---{}\n", (void*)this,
 //		wchar2char(PyUnicode_AsWideCharString(PyObject_Str(getDictObject()), NULL))));
 }
@@ -80,6 +100,8 @@ Map(getScriptType(), false)
 	_dataType->incRef();
 	initialize(streamInitData, isPersistentsStream);
 	
+	script::PyGC::incTracing("FixedDict");
+
 //	DEBUG_MSG(fmt::format("FixedDict::FixedDict(3): {:p}---{}\n", (void*)this,
 //		wchar2char(PyUnicode_AsWideCharString(PyObject_Str(getDictObject()), NULL))));
 }
@@ -92,6 +114,8 @@ Map(getScriptType(), false)
 	_dataType->incRef();
 	initialize("");
 
+	script::PyGC::incTracing("FixedDict");
+
 //	DEBUG_MSG(fmt::format("FixedDict::FixedDict(4): {:p}---{}\n", (void*)this,
 //		wchar2char(PyUnicode_AsWideCharString(PyObject_Str(getDictObject()), NULL))));
 }
@@ -101,6 +125,7 @@ Map(getScriptType(), false)
 FixedDict::~FixedDict()
 {
 	_dataType->decRef();
+	script::PyGC::decTracing("FixedDict");
 
 //	DEBUG_MSG(fmt::format("FixedDict::~FixedDict(): {:p}\n", (void*)this);
 }

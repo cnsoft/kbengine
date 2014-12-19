@@ -19,20 +19,20 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "bundle.hpp"
-#include "network/mercurystats.hpp"
-#include "network/network_interface.hpp"
-#include "network/packet.hpp"
-#include "network/channel.hpp"
-#include "network/tcp_packet.hpp"
-#include "network/udp_packet.hpp"
-#include "helper/profile.hpp"
+#include "bundle.h"
+#include "network/network_stats.h"
+#include "network/network_interface.h"
+#include "network/packet.h"
+#include "network/channel.h"
+#include "network/tcp_packet.h"
+#include "network/udp_packet.h"
+#include "helper/profile.h"
 
 #ifndef CODE_INLINE
-#include "bundle.ipp"
+#include "bundle.inl"
 #endif
 
-#include "cstdkbe/blowfish.hpp"
+#include "common/blowfish.h"
 
 
 #define BUNDLE_SEND_OP(op)																					\
@@ -95,7 +95,7 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 
 
 namespace KBEngine { 
-namespace Mercury
+namespace Network
 {
 
 //-------------------------------------------------------------------------------------
@@ -169,11 +169,11 @@ int32 Bundle::packetsLength(bool calccurr)
 	Packets::iterator iter = packets_.begin();
 	for (; iter != packets_.end(); iter++)
 	{
-		len += (*iter)->opsize();
+		len += (*iter)->length();
 	}
 
 	if(calccurr && pCurrPacket_)
-		len += pCurrPacket_->opsize();
+		len += pCurrPacket_->length();
 
 	return len;
 }
@@ -248,7 +248,7 @@ void Bundle::finish(bool issend)
 	if(pCurrMsgHandler_){
 		if(issend || numMessages_ > 1)
 		{
-			MercuryStats::getSingleton().trackMessage(MercuryStats::SEND, 
+			NetworkStats::getSingleton().trackMessage(NetworkStats::SEND, 
 				*pCurrMsgHandler_, currMsgLength_);
 		}
 	}
@@ -260,11 +260,39 @@ void Bundle::finish(bool issend)
 		if(currMsgPacketCount_ > 0)
 			pPacket = packets_[packets_.size() - currMsgPacketCount_];
 
-		currMsgLength_ -= MERCURY_MESSAGE_ID_SIZE;
-		currMsgLength_ -= MERCURY_MESSAGE_LENGTH_SIZE;
+		currMsgLength_ -= NETWORK_MESSAGE_ID_SIZE;
+		currMsgLength_ -= NETWORK_MESSAGE_LENGTH_SIZE;
 
-		memcpy(&pPacket->data()[currMsgLengthPos_], 
-			(uint8*)&currMsgLength_, MERCURY_MESSAGE_LENGTH_SIZE);
+		// 按照设计一个包最大也不可能超过NETWORK_MESSAGE_MAX_SIZE
+		if(g_componentType == BOTS_TYPE || g_componentType == CLIENT_TYPE)
+		{
+			KBE_ASSERT(currMsgLength_ <= NETWORK_MESSAGE_MAX_SIZE);
+		}
+
+		// 如果消息长度大于等于NETWORK_MESSAGE_MAX_SIZE
+		// 使用扩展消息长度机制，向消息长度后面再填充4字节
+		// 用于描述更大的长度
+		if(currMsgLength_ >= NETWORK_MESSAGE_MAX_SIZE)
+		{
+			MessageLength1 ex_msg_length = currMsgLength_;
+			KBEngine::EndianConvert(ex_msg_length);
+
+			MessageLength msgLen = NETWORK_MESSAGE_MAX_SIZE;
+			KBEngine::EndianConvert(msgLen);
+
+			memcpy(&pPacket->data()[currMsgLengthPos_], 
+				(uint8*)&msgLen, NETWORK_MESSAGE_LENGTH_SIZE);
+
+			pPacket->insert(currMsgLengthPos_ + NETWORK_MESSAGE_LENGTH_SIZE, (uint8*)&ex_msg_length, NETWORK_MESSAGE_LENGTH1_SIZE);
+		}
+		else
+		{
+			MessageLength msgLen = (MessageLength)currMsgLength_;
+			KBEngine::EndianConvert(msgLen);
+
+			memcpy(&pPacket->data()[currMsgLengthPos_], 
+				(uint8*)&msgLen, NETWORK_MESSAGE_LENGTH_SIZE);
+		}
 	}
 
 	if(issend)
@@ -337,7 +365,7 @@ void Bundle::resend(NetworkInterface & networkInterface, Channel * pChannel)
 	if(!reuse_)
 	{
 		MessageID msgid = currMsgID_;
-		const Mercury::MessageHandler* pCurrMsgHandler = pCurrMsgHandler_;
+		const Network::MessageHandler* pCurrMsgHandler = pCurrMsgHandler_;
 		finish();
 		currMsgID_ = msgid;
 		pCurrMsgHandler_ = pCurrMsgHandler;
@@ -404,14 +432,14 @@ void Bundle::newMessage(const MessageHandler& msgHandler)
 	pCurrPacket_->messageID(msgHandler.msgID);
 
 	// 此处对于非固定长度的消息来说需要先设置它的消息长度位为0， 到最后需要填充长度
-	if(msgHandler.msgLen == MERCURY_VARIABLE_MESSAGE)
+	if(msgHandler.msgLen == NETWORK_VARIABLE_MESSAGE)
 	{
 		MessageLength msglen = 0;
 		currMsgLengthPos_ = pCurrPacket_->wpos();
 		(*this) << msglen;
 	}
 
-	numMessages_++;
+	++numMessages_;
 	currMsgID_ = msgHandler.msgID;
 	currMsgPacketCount_ = 0;
 	currMsgHandlerLength_ = msgHandler.msgLen;

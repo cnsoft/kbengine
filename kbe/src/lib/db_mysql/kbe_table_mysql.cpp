@@ -18,15 +18,15 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "entity_table_mysql.hpp"
-#include "kbe_table_mysql.hpp"
-#include "db_exception.hpp"
-#include "db_interface_mysql.hpp"
-#include "dbmgr_lib/db_interface.hpp"
-#include "dbmgr_lib/entity_table.hpp"
-#include "entitydef/entitydef.hpp"
-#include "entitydef/scriptdef_module.hpp"
-#include "server/serverconfig.hpp"
+#include "entity_table_mysql.h"
+#include "kbe_table_mysql.h"
+#include "db_exception.h"
+#include "db_interface_mysql.h"
+#include "db_interface/db_interface.h"
+#include "db_interface/entity_table.h"
+#include "entitydef/entitydef.h"
+#include "entitydef/scriptdef_module.h"
+#include "server/serverconfig.h"
 
 namespace KBEngine { 
 
@@ -122,7 +122,7 @@ bool KBEEntityLogTableMysql::logEntity(DBInterface * dbi, const char* ip, uint32
 //-------------------------------------------------------------------------------------
 bool KBEEntityLogTableMysql::queryEntity(DBInterface * dbi, DBID dbid, EntityLog& entitylog, ENTITY_SCRIPT_UID entityType)
 {
-	std::string sqlstr = "select entityID,ip,port,componentID from kbe_entitylog where entityDBID=";
+	std::string sqlstr = "select entityID, ip, port, componentID from kbe_entitylog where entityDBID=";
 
 	char tbuf[MAX_BUF];
 	kbe_snprintf(tbuf, MAX_BUF, "%"PRDBID, dbid);
@@ -423,38 +423,6 @@ bool KBEAccountTableMysql::logAccount(DBInterface * dbi, ACCOUNT_INFOS& info)
 	}
 
 	return true;
-}
-
-//-------------------------------------------------------------------------------------
-KBEEntityTypeMysql::KBEEntityTypeMysql():
-	KBEEntityType()
-{
-}
-
-//-------------------------------------------------------------------------------------
-bool KBEEntityTypeMysql::syncToDB(DBInterface* dbi)
-{
-	std::string sqlstr = "DROP TABLE kbe_entitytypes;";
-
-	try
-	{
-		dbi->query(sqlstr.c_str(), sqlstr.size(), false);
-	}
-	catch(...)
-	{
-	}
-
-	bool ret = false;
-
-	sqlstr = "CREATE TABLE IF NOT EXISTS kbe_entitytypes "
-			"(entityType int unsigned not null DEFAULT 0,"
-			"typeid int unsigned not null DEFAULT 0,"
-			"PRIMARY KEY (entityType))"
-		"ENGINE="MYSQL_ENGINE_TYPE;
-
-	ret = dbi->query(sqlstr.c_str(), sqlstr.size(), true);
-	KBE_ASSERT(ret);
-	return ret;
 }
 
 //-------------------------------------------------------------------------------------

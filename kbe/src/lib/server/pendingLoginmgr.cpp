@@ -19,19 +19,19 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "pendingLoginmgr.hpp"
-#include "network/bundle.hpp"
-#include "network/channel.hpp"
-#include "network/event_dispatcher.hpp"
-#include "network/network_interface.hpp"
-#include "helper/profile.hpp"
+#include "pendingLoginmgr.h"
+#include "network/bundle.h"
+#include "network/channel.h"
+#include "network/event_dispatcher.h"
+#include "network/network_interface.h"
+#include "helper/profile.h"
 
 namespace KBEngine { 
 
 #define OP_TIME_OUT_MAX 120 * stampsPerSecondD()
 
 //-------------------------------------------------------------------------------------
-PendingLoginMgr::PendingLoginMgr(Mercury::NetworkInterface & networkInterface) :
+PendingLoginMgr::PendingLoginMgr(Network::NetworkInterface & networkInterface) :
 	Task(),
 	networkInterface_(networkInterface),
 	start_(false)
@@ -54,7 +54,7 @@ PendingLoginMgr::~PendingLoginMgr()
 }
 
 //-------------------------------------------------------------------------------------
-Mercury::EventDispatcher & PendingLoginMgr::dispatcher()
+Network::EventDispatcher & PendingLoginMgr::dispatcher()
 {
 	return networkInterface_.dispatcher();
 }

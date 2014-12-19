@@ -18,21 +18,21 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-
-#include "fixedarray.hpp"
-#include "datatypes.hpp"
+#include "fixedarray.h"
+#include "datatypes.h"
+#include "pyscript/py_gc.h"
 
 namespace KBEngine{ 
 
 SCRIPT_METHOD_DECLARE_BEGIN(FixedArray)
-SCRIPT_METHOD_DECLARE("__reduce_ex__",		reduce_ex__,	METH_VARARGS, 0)
-SCRIPT_METHOD_DECLARE("append",				append,			METH_VARARGS, 0)
-SCRIPT_METHOD_DECLARE("count",				count,			METH_VARARGS, 0)
-SCRIPT_METHOD_DECLARE("extend",				extend,			METH_VARARGS, 0)
-SCRIPT_METHOD_DECLARE("index",				index,			METH_VARARGS, 0)
-SCRIPT_METHOD_DECLARE("insert",				insert,			METH_VARARGS, 0)
-SCRIPT_METHOD_DECLARE("pop",				pop,			METH_VARARGS, 0)
-SCRIPT_METHOD_DECLARE("remove",				remove,			METH_VARARGS, 0)
+SCRIPT_METHOD_DECLARE("__reduce_ex__",				reduce_ex__,			METH_VARARGS, 0)
+SCRIPT_METHOD_DECLARE("append",						append,					METH_VARARGS, 0)
+SCRIPT_METHOD_DECLARE("count",						count,					METH_VARARGS, 0)
+SCRIPT_METHOD_DECLARE("extend",						extend,					METH_VARARGS, 0)
+SCRIPT_METHOD_DECLARE("index",						index,					METH_VARARGS, 0)
+SCRIPT_METHOD_DECLARE("insert",						insert,					METH_VARARGS, 0)
+SCRIPT_METHOD_DECLARE("pop",						pop,					METH_VARARGS, 0)
+SCRIPT_METHOD_DECLARE("remove",						remove,					METH_VARARGS, 0)
 SCRIPT_METHOD_DECLARE_END()
 
 
@@ -51,6 +51,8 @@ Sequence(getScriptType(), false)
 	_dataType->incRef();
 	initialize(strInitData);
 
+	script::PyGC::incTracing("FixedArray");
+
 //	DEBUG_MSG(fmt::format("FixedArray::FixedArray(): {:p}\n", this));
 }
 
@@ -61,6 +63,8 @@ Sequence(getScriptType(), false)
 	_dataType = static_cast<FixedArrayType*>(dataType);
 	_dataType->incRef();
 	initialize(pyInitData);
+
+	script::PyGC::incTracing("FixedArray");
 
 //	DEBUG_MSG(fmt::format("FixedArray::FixedArray(): {:p}\n", this));
 }
@@ -73,6 +77,8 @@ Sequence(getScriptType(), false)
 	_dataType->incRef();
 	initialize("");
 
+	script::PyGC::incTracing("FixedArray");
+
 //	DEBUG_MSG(fmt::format("FixedArray::FixedArray(): {:p}\n", this));
 }
 
@@ -80,6 +86,8 @@ Sequence(getScriptType(), false)
 FixedArray::~FixedArray()
 {
 	_dataType->decRef();
+
+	script::PyGC::decTracing("FixedArray");
 
 //	DEBUG_MSG(fmt::format("FixedArray::~FixedArray(): {:p}\n", this));
 }

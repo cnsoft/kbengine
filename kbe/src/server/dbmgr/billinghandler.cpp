@@ -17,19 +17,19 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
-#include "dbmgr.hpp"
-#include "billinghandler.hpp"
-#include "buffered_dbtasks.hpp"
-#include "dbmgr_lib/db_threadpool.hpp"
-#include "thread/threadpool.hpp"
-#include "thread/threadguard.hpp"
-#include "server/serverconfig.hpp"
-#include "network/endpoint.hpp"
-#include "network/channel.hpp"
-#include "network/bundle.hpp"
+#include "dbmgr.h"
+#include "billinghandler.h"
+#include "buffered_dbtasks.h"
+#include "db_interface/db_threadpool.h"
+#include "thread/threadpool.h"
+#include "thread/threadguard.h"
+#include "server/serverconfig.h"
+#include "network/endpoint.h"
+#include "network/channel.h"
+#include "network/bundle.h"
 
-#include "baseapp/baseapp_interface.hpp"
-#include "tools/billing_system/billingsystem_interface.hpp"
+#include "baseapp/baseapp_interface.h"
+#include "tools/billing_system/billingsystem_interface.h"
 
 namespace KBEngine{
 
@@ -74,7 +74,7 @@ BillingHandler_Normal::~BillingHandler_Normal()
 }
 
 //-------------------------------------------------------------------------------------
-bool BillingHandler_Normal::createAccount(Mercury::Channel* pChannel, std::string& registerName, 
+bool BillingHandler_Normal::createAccount(Network::Channel* pChannel, std::string& registerName, 
 										  std::string& password, std::string& datas, ACCOUNT_TYPE uatype)
 {
 	// 如果是email， 先查询账号是否存在然后将其登记入库
@@ -98,11 +98,11 @@ void BillingHandler_Normal::onCreateAccountCB(KBEngine::MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-bool BillingHandler_Normal::loginAccount(Mercury::Channel* pChannel, std::string& loginName, 
+bool BillingHandler_Normal::loginAccount(Network::Channel* pChannel, std::string& loginName, 
 										 std::string& password, std::string& datas)
 {
 	dbThreadPool_.addTask(new DBTaskAccountLogin(pChannel->addr(), 
-		loginName, loginName, password, true, datas, datas));
+		loginName, loginName, password, SERVER_SUCCESS, datas, datas));
 
 	return true;
 }
@@ -113,7 +113,7 @@ void BillingHandler_Normal::onLoginAccountCB(KBEngine::MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void BillingHandler_Normal::charge(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void BillingHandler_Normal::charge(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	INFO_MSG("BillingHandler_Normal::charge: no implement!\n");
 }
@@ -125,43 +125,43 @@ void BillingHandler_Normal::onChargeCB(KBEngine::MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-void BillingHandler_Normal::eraseClientReq(Mercury::Channel* pChannel, std::string& logkey)
+void BillingHandler_Normal::eraseClientReq(Network::Channel* pChannel, std::string& logkey)
 {
 }
 
 //-------------------------------------------------------------------------------------
-void BillingHandler_Normal::accountActivate(Mercury::Channel* pChannel, std::string& scode)
+void BillingHandler_Normal::accountActivate(Network::Channel* pChannel, std::string& scode)
 {
 	dbThreadPool_.addTask(new DBTaskActivateAccount(pChannel->addr(), scode));
 }
 
 //-------------------------------------------------------------------------------------
-void BillingHandler_Normal::accountReqResetPassword(Mercury::Channel* pChannel, std::string& accountName)
+void BillingHandler_Normal::accountReqResetPassword(Network::Channel* pChannel, std::string& accountName)
 {
 	dbThreadPool_.addTask(new DBTaskReqAccountResetPassword(pChannel->addr(), accountName));
 }
 
 //-------------------------------------------------------------------------------------
-void BillingHandler_Normal::accountResetPassword(Mercury::Channel* pChannel, std::string& accountName, std::string& newpassword, std::string& scode)
+void BillingHandler_Normal::accountResetPassword(Network::Channel* pChannel, std::string& accountName, std::string& newpassword, std::string& scode)
 {
 	dbThreadPool_.addTask(new DBTaskAccountResetPassword(pChannel->addr(), accountName, newpassword, scode));
 }
 
 //-------------------------------------------------------------------------------------
-void BillingHandler_Normal::accountReqBindMail(Mercury::Channel* pChannel, ENTITY_ID entityID, std::string& accountName, 
+void BillingHandler_Normal::accountReqBindMail(Network::Channel* pChannel, ENTITY_ID entityID, std::string& accountName, 
 											   std::string& password, std::string& email)
 {
 	dbThreadPool_.addTask(new DBTaskReqAccountBindEmail(pChannel->addr(), entityID, accountName, password, email));
 }
 
 //-------------------------------------------------------------------------------------
-void BillingHandler_Normal::accountBindMail(Mercury::Channel* pChannel, std::string& username, std::string& scode)
+void BillingHandler_Normal::accountBindMail(Network::Channel* pChannel, std::string& username, std::string& scode)
 {
 	dbThreadPool_.addTask(new DBTaskAccountBindEmail(pChannel->addr(), username, scode));
 }
 
 //-------------------------------------------------------------------------------------
-void BillingHandler_Normal::accountNewPassword(Mercury::Channel* pChannel, ENTITY_ID entityID, std::string& accountName, 
+void BillingHandler_Normal::accountNewPassword(Network::Channel* pChannel, ENTITY_ID entityID, std::string& accountName, 
 											   std::string& password, std::string& newpassword)
 {
 	dbThreadPool_.addTask(new DBTaskAccountNewPassword(pChannel->addr(), entityID, accountName, password, newpassword));
@@ -184,12 +184,12 @@ BillingHandler_ThirdParty::~BillingHandler_ThirdParty()
 }
 
 //-------------------------------------------------------------------------------------
-bool BillingHandler_ThirdParty::createAccount(Mercury::Channel* pChannel, std::string& registerName, 
+bool BillingHandler_ThirdParty::createAccount(Network::Channel* pChannel, std::string& registerName, 
 											  std::string& password, std::string& datas, ACCOUNT_TYPE uatype)
 {
 	KBE_ASSERT(pBillingChannel_);
 
-	Mercury::Bundle::SmartPoolObjectPtr bundle = Mercury::Bundle::createSmartPoolObj();
+	Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
 	
 	(*(*bundle)).newMessage(BillingSystemInterface::reqCreateAccount);
 	(*(*bundle)) << pChannel->componentID();
@@ -236,12 +236,12 @@ void BillingHandler_ThirdParty::onCreateAccountCB(KBEngine::MemoryStream& s)
 }
 
 //-------------------------------------------------------------------------------------
-bool BillingHandler_ThirdParty::loginAccount(Mercury::Channel* pChannel, std::string& loginName, 
+bool BillingHandler_ThirdParty::loginAccount(Network::Channel* pChannel, std::string& loginName, 
 											 std::string& password, std::string& datas)
 {
 	KBE_ASSERT(pBillingChannel_);
 
-	Mercury::Bundle::SmartPoolObjectPtr bundle = Mercury::Bundle::createSmartPoolObj();
+	Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
 
 	(*(*bundle)).newMessage(BillingSystemInterface::onAccountLogin);
 	(*(*bundle)) << pChannel->componentID();
@@ -263,7 +263,7 @@ void BillingHandler_ThirdParty::onLoginAccountCB(KBEngine::MemoryStream& s)
 {
 	std::string loginName, accountName, password, postdatas, getdatas;
 	COMPONENT_ID cid;
-	bool success = false;
+	SERVER_ERROR_CODE success = SERVER_ERR_OP_FAILED;
 
 	s >> cid >> loginName >> accountName >> password >> success;
 	s.readBlob(postdatas);
@@ -302,8 +302,8 @@ bool BillingHandler_ThirdParty::reconnect()
 		pBillingChannel_->decRef();
 	}
 
-	Mercury::Address addr = g_kbeSrvConfig.billingSystemAddr();
-	Mercury::EndPoint* pEndPoint = new Mercury::EndPoint(addr);
+	Network::Address addr = g_kbeSrvConfig.billingSystemAddr();
+	Network::EndPoint* pEndPoint = new Network::EndPoint(addr);
 
 	pEndPoint->socket(SOCK_STREAM);
 	if (!pEndPoint->good())
@@ -315,7 +315,7 @@ bool BillingHandler_ThirdParty::reconnect()
 	pEndPoint->setnonblocking(true);
 	pEndPoint->setnodelay(true);
 
-	pBillingChannel_ = new Mercury::Channel(Dbmgr::getSingleton().networkInterface(), pEndPoint, Mercury::Channel::INTERNAL);
+	pBillingChannel_ = new Network::Channel(Dbmgr::getSingleton().networkInterface(), pEndPoint, Network::Channel::INTERNAL);
 	pBillingChannel_->incRef();
 
 	int trycount = 0;
@@ -364,7 +364,7 @@ bool BillingHandler_ThirdParty::process()
 }
 
 //-------------------------------------------------------------------------------------
-void BillingHandler_ThirdParty::charge(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void BillingHandler_ThirdParty::charge(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	std::string chargeID;
 	std::string datas;
@@ -381,7 +381,7 @@ void BillingHandler_ThirdParty::charge(Mercury::Channel* pChannel, KBEngine::Mem
 
 	KBE_ASSERT(pBillingChannel_);
 
-	Mercury::Bundle::SmartPoolObjectPtr bundle = Mercury::Bundle::createSmartPoolObj();
+	Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
 
 	(*(*bundle)).newMessage(BillingSystemInterface::charge);
 	(*(*bundle)) << pChannel->componentID();
@@ -407,14 +407,14 @@ void BillingHandler_ThirdParty::onChargeCB(KBEngine::MemoryStream& s)
 	CALLBACK_ID cbid;
 	COMPONENT_ID cid;
 	DBID dbid;
-	bool success;
+	SERVER_ERROR_CODE retcode;
 
 	s >> cid;
 	s >> chargeID;
 	s >> dbid;
 	s.readBlob(datas);
 	s >> cbid;
-	s >> success;
+	s >> retcode;
 
 	INFO_MSG(fmt::format("BillingHandler_ThirdParty::onChargeCB: chargeID={0}, dbid={3}, cbid={1}, cid={4}, datas={2}!\n",
 		chargeID, cbid, datas, dbid, cid));
@@ -428,24 +428,24 @@ void BillingHandler_ThirdParty::onChargeCB(KBEngine::MemoryStream& s)
 		return;
 	}
 
-	Mercury::Bundle::SmartPoolObjectPtr bundle = Mercury::Bundle::createSmartPoolObj();
+	Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
 
 	(*(*bundle)).newMessage(BaseappInterface::onChargeCB);
 	(*(*bundle)) << chargeID;
 	(*(*bundle)) << dbid;
 	(*(*bundle)).appendBlob(datas);
 	(*(*bundle)) << cbid;
-	(*(*bundle)) << success;
+	(*(*bundle)) << retcode;
 
 	(*(*bundle)).send(Dbmgr::getSingleton().networkInterface(), cinfos->pChannel);
 }
 
 //-------------------------------------------------------------------------------------
-void BillingHandler_ThirdParty::eraseClientReq(Mercury::Channel* pChannel, std::string& logkey)
+void BillingHandler_ThirdParty::eraseClientReq(Network::Channel* pChannel, std::string& logkey)
 {
 	KBE_ASSERT(pBillingChannel_);
 
-	Mercury::Bundle::SmartPoolObjectPtr bundle = Mercury::Bundle::createSmartPoolObj();
+	Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
 
 	(*(*bundle)).newMessage(BillingSystemInterface::eraseClientReq);
 	(*(*bundle)) << logkey;
@@ -461,34 +461,34 @@ void BillingHandler_ThirdParty::eraseClientReq(Mercury::Channel* pChannel, std::
 
 
 //-------------------------------------------------------------------------------------
-void BillingHandler_ThirdParty::accountActivate(Mercury::Channel* pChannel, std::string& scode)
+void BillingHandler_ThirdParty::accountActivate(Network::Channel* pChannel, std::string& scode)
 {
 }
 
 
 //-------------------------------------------------------------------------------------
-void BillingHandler_ThirdParty::accountReqResetPassword(Mercury::Channel* pChannel, std::string& accountName)
+void BillingHandler_ThirdParty::accountReqResetPassword(Network::Channel* pChannel, std::string& accountName)
 {
 }
 
 //-------------------------------------------------------------------------------------
-void BillingHandler_ThirdParty::accountResetPassword(Mercury::Channel* pChannel, std::string& accountName, std::string& newpassword, std::string& scode)
+void BillingHandler_ThirdParty::accountResetPassword(Network::Channel* pChannel, std::string& accountName, std::string& newpassword, std::string& scode)
 {
 }
 
 //-------------------------------------------------------------------------------------
-void BillingHandler_ThirdParty::accountReqBindMail(Mercury::Channel* pChannel, ENTITY_ID entityID, std::string& accountName, 
+void BillingHandler_ThirdParty::accountReqBindMail(Network::Channel* pChannel, ENTITY_ID entityID, std::string& accountName, 
 												   std::string& password, std::string& email)
 {
 }
 
 //-------------------------------------------------------------------------------------
-void BillingHandler_ThirdParty::accountBindMail(Mercury::Channel* pChannel, std::string& username, std::string& scode)
+void BillingHandler_ThirdParty::accountBindMail(Network::Channel* pChannel, std::string& username, std::string& scode)
 {
 }
 
 //-------------------------------------------------------------------------------------
-void BillingHandler_ThirdParty::accountNewPassword(Mercury::Channel* pChannel, ENTITY_ID entityID, std::string& accountName, 
+void BillingHandler_ThirdParty::accountNewPassword(Network::Channel* pChannel, ENTITY_ID entityID, std::string& accountName, 
 												   std::string& password, std::string& newpassword)
 {
 }

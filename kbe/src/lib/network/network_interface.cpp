@@ -19,29 +19,29 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "network_interface.hpp"
+#include "network_interface.h"
 #ifndef CODE_INLINE
-#include "network_interface.ipp"
+#include "network_interface.inl"
 #endif
 
-#include "network/address.hpp"
-#include "network/event_dispatcher.hpp"
-#include "network/packet_receiver.hpp"
-#include "network/listener_receiver.hpp"
-#include "network/channel.hpp"
-#include "network/packet.hpp"
-#include "network/delayed_channels.hpp"
-#include "network/interfaces.hpp"
-#include "network/message_handler.hpp"
+#include "network/address.h"
+#include "network/event_dispatcher.h"
+#include "network/packet_receiver.h"
+#include "network/listener_receiver.h"
+#include "network/channel.h"
+#include "network/packet.h"
+#include "network/delayed_channels.h"
+#include "network/interfaces.h"
+#include "network/message_handler.h"
 
 namespace KBEngine { 
-namespace Mercury
+namespace Network
 {
 const int NetworkInterface::RECV_BUFFER_SIZE = 16 * 1024 * 1024; // 16MB
-const char * NetworkInterface::USE_KBEMACHINED = "kbemachined";
+const char * NetworkInterface::USE_KBEMACHINED = "kbemachine";
 
 //-------------------------------------------------------------------------------------
-NetworkInterface::NetworkInterface(Mercury::EventDispatcher * pMainDispatcher,
+NetworkInterface::NetworkInterface(Network::EventDispatcher * pMainDispatcher,
 		int32 extlisteningPort_min, int32 extlisteningPort_max, const char * extlisteningInterface,
 		uint32 extrbuffer, uint32 extwbuffer,
 		int32 intlisteningPort, const char * intlisteningInterface,
@@ -49,8 +49,7 @@ NetworkInterface::NetworkInterface(Mercury::EventDispatcher * pMainDispatcher,
 	extEndpoint_(),
 	intEndpoint_(),
 	channelMap_(),
-	pDispatcher_(new EventDispatcher),
-	pMainDispatcher_(NULL),
+	pDispatcher_(pMainDispatcher),
 	pExtensionData_(NULL),
 	pExtListenerReceiver_(NULL),
 	pIntListenerReceiver_(NULL),
@@ -85,10 +84,7 @@ NetworkInterface::NetworkInterface(Mercury::EventDispatcher * pMainDispatcher,
 	KBE_ASSERT(good() && "NetworkInterface::NetworkInterface: no available port, "
 		"please check for kbengine_defs.xml!\n");
 
-	if (pMainDispatcher != NULL)
-	{
-		this->attach(*pMainDispatcher);
-	}
+	pDelayedChannels_->init(this->dispatcher(), this);
 }
 
 //-------------------------------------------------------------------------------------
@@ -112,34 +108,17 @@ NetworkInterface::~NetworkInterface()
 		}
 	}
 
-	this->detach();
 	this->closeSocket();
 
-	SAFE_RELEASE(pDispatcher_);
+	if (pDispatcher_ != NULL)
+	{
+		pDelayedChannels_->fini(this->dispatcher());
+		pDispatcher_ = NULL;
+	}
+
 	SAFE_RELEASE(pDelayedChannels_);
 	SAFE_RELEASE(pExtListenerReceiver_);
 	SAFE_RELEASE(pIntListenerReceiver_);
-}
-
-//-------------------------------------------------------------------------------------
-void NetworkInterface::attach(EventDispatcher & mainDispatcher)
-{
-	KBE_ASSERT(pMainDispatcher_ == NULL);
-	pMainDispatcher_ = &mainDispatcher;
-	mainDispatcher.attach(this->dispatcher());
-	
-	pDelayedChannels_->init(this->mainDispatcher(), this);
-}
-
-//-------------------------------------------------------------------------------------
-void NetworkInterface::detach()
-{
-	if (pMainDispatcher_ != NULL)
-	{
-		pDelayedChannels_->fini(this->mainDispatcher());
-		pMainDispatcher_->detach(this->dispatcher());
-		pMainDispatcher_ = NULL;
-	}
 }
 
 //-------------------------------------------------------------------------------------
@@ -311,7 +290,7 @@ bool NetworkInterface::recreateListeningSocket(const char* pEndPointName, uint16
 		}
 	}
 
-	int backlog = Mercury::g_SOMAXCONN;
+	int backlog = Network::g_SOMAXCONN;
 	if(backlog < 5)
 		backlog = 5;
 
@@ -605,8 +584,8 @@ Reason NetworkInterface::basicSendWithRetries(Channel * pChannel, Packet * pPack
 			}
 
 			WARNING_MSG(fmt::format("NetworkInterface::basicSendWithRetries: "
-				"Transmit queue full, waiting for space... ({})\n",
-				retries));
+				"Transmit queue full, waiting for space(kbengine.xml->channelCommon->writeBufferSize->{})... ({})\n",
+				(pChannel->isInternal() ? "internal" : "external"), retries));
 			
 			KBEngine::sleep(pChannel->isInternal() ? g_intReSendInterval : g_extReSendInterval);
 			continue;
@@ -627,14 +606,20 @@ Reason NetworkInterface::basicSendSingleTry(Channel * pChannel, Packet * pPacket
 	{
 		ERROR_MSG(fmt::format("NetworkInterface::basicSendSingleTry: channel({}) send error, reason={}.\n", pChannel->c_str(), 
 			reasonToString(REASON_CHANNEL_CONDEMN)));
+
 		return REASON_CHANNEL_CONDEMN;
 	}
 
 	EndPoint * endpoint = pChannel->endpoint();
 	KBE_ASSERT(pPacket->rpos() == 0);
+
 	int len = endpoint->send(pPacket->data() + pPacket->sentSize, pPacket->totalSize() - pPacket->sentSize);
+
 	if(len > 0)
+	{
 		pPacket->sentSize += len;
+		// DEBUG_MSG(fmt::format("NetworkInterface::basicSendSingleTry: sent={}, sentTotalSize={}.\n", len, pPacket->sentSize));
+	}
 
 	if (pPacket->sentSize == pPacket->totalSize())
 	{
@@ -714,12 +699,12 @@ void NetworkInterface::onPacketOut(const Packet & packet)
 }
 
 //-------------------------------------------------------------------------------------
-void NetworkInterface::processAllChannelPackets(KBEngine::Mercury::MessageHandlers* pMsgHandlers)
+void NetworkInterface::processAllChannelPackets(KBEngine::Network::MessageHandlers* pMsgHandlers)
 {
 	ChannelMap::iterator iter = channelMap_.begin();
 	for(; iter != channelMap_.end(); )
 	{
-		Mercury::Channel* pChannel = iter->second;
+		Network::Channel* pChannel = iter->second;
 
 		if(pChannel->isDestroyed() || pChannel->isCondemn())
 		{

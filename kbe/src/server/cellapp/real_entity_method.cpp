@@ -18,13 +18,13 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "cellapp.hpp"
-#include "real_entity_method.hpp"
-#include "entitydef/method.hpp"
-#include "network/bundle.hpp"
-#include "helper/eventhistory_stats.hpp"
+#include "cellapp.h"
+#include "real_entity_method.h"
+#include "entitydef/method.h"
+#include "network/bundle.h"
+#include "helper/eventhistory_stats.h"
 
-#include "cellapp_interface.hpp"
+#include "cellapp_interface.h"
 
 namespace KBEngine{
 
@@ -71,7 +71,7 @@ PyObject* RealEntityMethod::callmethod(PyObject* args, PyObject* kwds)
 		MemoryStream* mstream = MemoryStream::ObjPool().createObject();
 		methodDescription->addToStream(mstream, args);
 
-		Mercury::Bundle* pForwardBundle = Mercury::Bundle::ObjPool().createObject();
+		Network::Bundle* pForwardBundle = Network::Bundle::ObjPool().createObject();
 		
 		(*pForwardBundle).newMessage(CellappInterface::onRemoteRealMethodCall);
 		(*pForwardBundle) << ghostEntityID_;
@@ -79,15 +79,15 @@ PyObject* RealEntityMethod::callmethod(PyObject* args, PyObject* kwds)
 		if(mstream->wpos() > 0)
 			(*pForwardBundle).append(mstream->data(), mstream->wpos());
 
-		if(Mercury::g_trace_packet > 0)
+		if(Network::g_trace_packet > 0)
 		{
-			if(Mercury::g_trace_packet_use_logfile)
+			if(Network::g_trace_packet_use_logfile)
 				DebugHelper::getSingleton().changeLogger("packetlogs");
 
 			DEBUG_MSG(fmt::format("RealEntityMethod::callmethod: pushUpdateData: CellappInterface::onRemoteRealMethodCall({2}({0})::{1})\n",
 				ghostEntityID_, methodDescription->getName(), scriptName_));
 
-			switch(Mercury::g_trace_packet)
+			switch(Network::g_trace_packet)
 			{
 			case 1:	
 				mstream->hexlike();	
@@ -100,7 +100,7 @@ PyObject* RealEntityMethod::callmethod(PyObject* args, PyObject* kwds)
 				break;
 			};
 
-			if(Mercury::g_trace_packet_use_logfile)	
+			if(Network::g_trace_packet_use_logfile)	
 				DebugHelper::getSingleton().changeLogger(COMPONENT_NAME_EX(g_componentType));
 		}
 
@@ -119,7 +119,7 @@ PyObject* RealEntityMethod::callmethod(PyObject* args, PyObject* kwds)
 		}
 		else
 		{
-			Mercury::Bundle::ObjPool().reclaimObject(pForwardBundle);
+			Network::Bundle::ObjPool().reclaimObject(pForwardBundle);
 		}
 	}
 

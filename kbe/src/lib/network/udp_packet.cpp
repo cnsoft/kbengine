@@ -19,17 +19,17 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "udp_packet.hpp"
+#include "udp_packet.h"
 #ifndef CODE_INLINE
-#include "udp_packet.ipp"
+#include "udp_packet.inl"
 #endif
-#include "network/bundle.hpp"
-#include "network/endpoint.hpp"
-#include "network/network_interface.hpp"
-#include "network/message_handler.hpp"
+#include "network/bundle.h"
+#include "network/endpoint.h"
+#include "network/network_interface.h"
+#include "network/message_handler.h"
 
 namespace KBEngine { 
-namespace Mercury
+namespace Network
 {
 //-------------------------------------------------------------------------------------
 static ObjectPool<UDPPacket> _g_objPool("UDPPacket");
@@ -73,9 +73,18 @@ size_t UDPPacket::maxBufferSize()
 }
 
 //-------------------------------------------------------------------------------------
+void UDPPacket::onReclaimObject()
+{
+	Packet::onReclaimObject();
+	data_resize(maxBufferSize());
+}
+
+//-------------------------------------------------------------------------------------
 int UDPPacket::recvFromEndPoint(EndPoint & ep, Address* pAddr)
 {
 	KBE_ASSERT(maxBufferSize() > wpos());
+
+	// 当接收来的大小大于接收缓冲区的时候，recvfrom返回-1
 	int len = ep.recvfrom(data() + wpos(), size() - wpos(),
 		(u_int16_t*)&pAddr->port, (u_int32_t*)&pAddr->ip);
 

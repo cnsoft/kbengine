@@ -19,17 +19,17 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "entitymailboxabstract.hpp"
-#include "pyscript/pickler.hpp"
-#include "helper/debug_helper.hpp"
-#include "network/packet.hpp"
-#include "network/bundle.hpp"
-#include "network/network_interface.hpp"
-#include "server/components.hpp"
-#include "client_lib/client_interface.hpp"
+#include "entitymailboxabstract.h"
+#include "pyscript/pickler.h"
+#include "helper/debug_helper.h"
+#include "network/packet.h"
+#include "network/bundle.h"
+#include "network/network_interface.h"
+#include "server/components.h"
+#include "client_lib/client_interface.h"
 
-#include "../../server/baseapp/baseapp_interface.hpp"
-#include "../../server/cellapp/cellapp_interface.hpp"
+#include "../../server/baseapp/baseapp_interface.h"
+#include "../../server/cellapp/cellapp_interface.h"
 
 namespace KBEngine{
 
@@ -49,14 +49,14 @@ SCRIPT_INIT(EntityMailboxAbstract, 0, 0, 0, 0, 0)
 
 //-------------------------------------------------------------------------------------
 EntityMailboxAbstract::EntityMailboxAbstract(PyTypeObject* scriptType, 
-											const Mercury::Address* pAddr, 
+											const Network::Address* pAddr, 
 											COMPONENT_ID componentID, 
 											ENTITY_ID eid, 
 											uint16 utype, 
 											ENTITY_MAILBOX_TYPE type):
 ScriptObject(scriptType, false),
 componentID_(componentID),
-addr_((pAddr == NULL) ? Mercury::Address::NONE : *pAddr),
+addr_((pAddr == NULL) ? Network::Address::NONE : *pAddr),
 type_(type),
 id_(eid),
 utype_(utype)
@@ -69,16 +69,17 @@ EntityMailboxAbstract::~EntityMailboxAbstract()
 }
 
 //-------------------------------------------------------------------------------------
-void EntityMailboxAbstract::newMail(Mercury::Bundle& bundle)
+void EntityMailboxAbstract::newMail(Network::Bundle& bundle)
 {
 	// 如果是server端的mailbox
 	if(g_componentType != CLIENT_TYPE && g_componentType != BOTS_TYPE)
 	{
-		if(componentID_ == 0)	// 客户端
+		// 如果ID为0，则这是一个客户端组件，否则为服务端。
+		if(componentID_ == 0)
 		{
 			bundle.newMessage(ClientInterface::onRemoteMethodCall);
 		}
-		else					// 服务器组件
+		else
 		{
 			Components::ComponentInfos* cinfos = Components::getSingleton().findComponent(componentID_);
 
@@ -128,14 +129,14 @@ void EntityMailboxAbstract::newMail(Mercury::Bundle& bundle)
 }
 
 //-------------------------------------------------------------------------------------
-bool EntityMailboxAbstract::postMail(Mercury::Bundle& bundle)
+bool EntityMailboxAbstract::postMail(Network::Bundle* pBundle)
 {
 	KBE_ASSERT(Components::getSingleton().pNetworkInterface() != NULL);
-	Mercury::Channel* pChannel = getChannel();
+	Network::Channel* pChannel = getChannel();
 
 	if(pChannel && !pChannel->isDead())
 	{
-		bundle.send(*Components::getSingleton().pNetworkInterface(), pChannel);
+		pChannel->pushBundle(pBundle);
 		return true;
 	}
 	else
@@ -144,6 +145,7 @@ bool EntityMailboxAbstract::postMail(Mercury::Bundle& bundle)
 			addr_.c_str()));
 	}
 
+	Network::Bundle::ObjPool().reclaimObject(pBundle);
 	return false;
 }
 

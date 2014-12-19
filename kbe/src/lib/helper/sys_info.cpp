@@ -18,7 +18,7 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "sys_info.hpp"
+#include "sys_info.h"
 
 extern "C"
 {
@@ -27,7 +27,7 @@ extern "C"
 }
 
 #ifndef CODE_INLINE
-#include "sys_info.ipp"
+#include "sys_info.inl"
 #endif
 
 namespace KBEngine
@@ -111,6 +111,8 @@ bool SystemInfo::_autocreate()
 //-------------------------------------------------------------------------------------
 bool SystemInfo::hasProcess(uint32 pid)
 {
+	clear();
+
     if(!_autocreate())
 		return false;
 
@@ -159,6 +161,8 @@ uint32 SystemInfo::countCPU()
 //-------------------------------------------------------------------------------------
 SystemInfo::PROCESS_INFOS SystemInfo::getProcessInfo(uint32 pid)
 {
+	clear();
+
 	PROCESS_INFOS infos;
 	infos.cpu = 0.f;
 	infos.memused = 0;
@@ -177,12 +181,12 @@ _TRYGET:
 		if(!tryed)
 		{
 			clear();
+
 			tryed = true;
+			infos.error = true;
 
 			if(_autocreate())
 				goto _TRYGET;
-
-			infos.error = true;
 		}
 
 		goto _END;

@@ -18,17 +18,17 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "helper/profile.hpp"
-#include "encryption_filter.hpp"
-#include "helper/debug_helper.hpp"
-#include "network/tcp_packet.hpp"
-#include "network/udp_packet.hpp"
-#include "network/channel.hpp"
-#include "network/network_interface.hpp"
-#include "network/packet_receiver.hpp"
+#include "helper/profile.h"
+#include "encryption_filter.h"
+#include "helper/debug_helper.h"
+#include "network/tcp_packet.h"
+#include "network/udp_packet.h"
+#include "network/channel.h"
+#include "network/network_interface.h"
+#include "network/packet_receiver.h"
 
 namespace KBEngine { 
-namespace Mercury
+namespace Network
 {
 
 //-------------------------------------------------------------------------------------
@@ -85,12 +85,12 @@ Reason BlowfishFilter::send(NetworkInterface & networkInterface, Channel * pChan
 		else
 			pOutPacket = UDPPacket::ObjPool().createObject();
 		
-		PacketLength oldlen = pPacket->opsize();
+		PacketLength oldlen = pPacket->length();
 		pOutPacket->wpos(PACKET_LENGTH_SIZE + 1);
 		encrypt(pPacket, pOutPacket);
 
-		PacketLength packetLen = pPacket->opsize() + 1;
-		uint8 padSize = pPacket->opsize() - oldlen;
+		PacketLength packetLen = pPacket->length() + 1;
+		uint8 padSize = pPacket->length() - oldlen;
 		size_t oldwpos =  pOutPacket->wpos();
 		pOutPacket->wpos(0);
 
@@ -106,7 +106,7 @@ Reason BlowfishFilter::send(NetworkInterface & networkInterface, Channel * pChan
 			UDPPacket::ObjPool().reclaimObject(static_cast<UDPPacket *>(pOutPacket));
 
 		/*
-		if(Mercury::g_trace_packet > 0)
+		if(Network::g_trace_packet > 0)
 		{
 			DEBUG_MSG(fmt::format("BlowfishFilter::send: packetLen={}, padSize={}\n",
 				packetLen, (int)padSize));
@@ -137,7 +137,7 @@ Reason BlowfishFilter::recv(Channel * pChannel, PacketReceiver & receiver, Packe
 		{
 			if(pPacket)
 			{
-				pPacket_->append(pPacket->data() + pPacket->rpos(), pPacket->opsize());
+				pPacket_->append(pPacket->data() + pPacket->rpos(), pPacket->length());
 				
 				if(pPacket->isTCPPacket())
 					TCPPacket::ObjPool().reclaimObject(static_cast<TCPPacket *>(pPacket));
@@ -151,7 +151,7 @@ Reason BlowfishFilter::recv(Channel * pChannel, PacketReceiver & receiver, Packe
 		if(packetLen_ <= 0)
 		{
 			// 如果满足一个最小包则尝试解包, 否则缓存这个包待与下一个包合并然后解包
-			if(pPacket->opsize() >= (PACKET_LENGTH_SIZE + 1 + BLOCK_SIZE))
+			if(pPacket->length() >= (PACKET_LENGTH_SIZE + 1 + BLOCK_SIZE))
 			{
 				(*pPacket) >> packetLen_;
 				(*pPacket) >> padSize_;
@@ -159,7 +159,7 @@ Reason BlowfishFilter::recv(Channel * pChannel, PacketReceiver & receiver, Packe
 				packetLen_ -= 1;
 
 				// 如果包是完整下面流出会解密， 如果有多余的内容需要将其剪裁出来待与下一个包合并
-				if(pPacket->opsize() > packetLen_)
+				if(pPacket->length() > packetLen_)
 				{
 					if(pPacket->isTCPPacket())
 						pPacket_ = TCPPacket::ObjPool().createObject();
@@ -169,7 +169,7 @@ Reason BlowfishFilter::recv(Channel * pChannel, PacketReceiver & receiver, Packe
 					pPacket_->append(pPacket->data() + pPacket->rpos() + packetLen_, pPacket->wpos() - (packetLen_ + pPacket->rpos()));
 					pPacket->wpos(pPacket->rpos() + packetLen_);
 				}
-				else if(pPacket->opsize() == packetLen_)
+				else if(pPacket->length() == packetLen_)
 				{
 					if(pPacket_ != NULL)
 						pPacket_ = NULL;
@@ -193,7 +193,7 @@ Reason BlowfishFilter::recv(Channel * pChannel, PacketReceiver & receiver, Packe
 		else
 		{
 			// 如果上一次有做过解包行为但包还没有完整则继续处理
-			if(pPacket->opsize() > packetLen_)
+			if(pPacket->length() > packetLen_)
 			{
 				if(pPacket->isTCPPacket())
 					pPacket_ = TCPPacket::ObjPool().createObject();
@@ -203,7 +203,7 @@ Reason BlowfishFilter::recv(Channel * pChannel, PacketReceiver & receiver, Packe
 				pPacket_->append(pPacket->data() + pPacket->rpos() + packetLen_, pPacket->wpos() - (packetLen_ + pPacket->rpos()));
 				pPacket->wpos(pPacket->rpos() + packetLen_);
 			}
-			else if(pPacket->opsize() == packetLen_)
+			else if(pPacket->length() == packetLen_)
 			{
 				if(pPacket_ != NULL)
 					pPacket_ = NULL;
@@ -222,7 +222,7 @@ Reason BlowfishFilter::recv(Channel * pChannel, PacketReceiver & receiver, Packe
 		pPacket->wpos(pPacket->wpos() - padSize_);
 
 		/*
-		if(Mercury::g_trace_packet > 0)
+		if(Network::g_trace_packet > 0)
 		{
 			DEBUG_MSG(fmt::format("BlowfishFilter::recv: packetLen={}, padSize={}\n",
 				(packetLen_ + 1), (int)padSize_));
@@ -266,7 +266,7 @@ void BlowfishFilter::encrypt(Packet * pInPacket, Packet * pOutPacket)
 		padSize = BLOCK_SIZE - (pInPacket->totalSize() % BLOCK_SIZE);
 
 		// 向pPacket中填充这么多
-		pInPacket->reserve(pInPacket->size() + padSize);
+		pInPacket->data_resize(pInPacket->size() + padSize);
 
 		// 填充0
 		memset(pInPacket->data() + pInPacket->wpos(), 0, padSize);
@@ -276,7 +276,7 @@ void BlowfishFilter::encrypt(Packet * pInPacket, Packet * pOutPacket)
 	
 	if(pInPacket != pOutPacket)
 	{
-		pOutPacket->reserve(pInPacket->size() + pOutPacket->wpos());
+		pOutPacket->data_resize(pInPacket->size() + pOutPacket->wpos());
 
 		int size = KBEBlowfish::encrypt(pInPacket->data(), pOutPacket->data() + pOutPacket->wpos(),  pInPacket->wpos());
 		pOutPacket->wpos(size + pOutPacket->wpos());
@@ -288,7 +288,7 @@ void BlowfishFilter::encrypt(Packet * pInPacket, Packet * pOutPacket)
 		else
 			pOutPacket = UDPPacket::ObjPool().createObject();
 
-		pOutPacket->reserve(pInPacket->size() + 1);
+		pOutPacket->data_resize(pInPacket->size() + 1);
 
 		int size = KBEBlowfish::encrypt(pInPacket->data(), pOutPacket->data() + pOutPacket->wpos(),  pInPacket->wpos());
 		pOutPacket->wpos(size);
@@ -309,7 +309,7 @@ void BlowfishFilter::decrypt(Packet * pInPacket, Packet * pOutPacket)
 {
 	if(pInPacket != pOutPacket)
 	{
-		pOutPacket->reserve(pInPacket->size());
+		pOutPacket->data_resize(pInPacket->size());
 
 		int size = KBEBlowfish::decrypt(pInPacket->data() + pInPacket->rpos(), 
 			pOutPacket->data() + pOutPacket->rpos(),  

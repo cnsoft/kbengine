@@ -38,10 +38,10 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <_ProjectFileVersion>10.0.40219.1</_ProjectFileVersion>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">../../../bin/Hybrid/</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">../../../bin/server/</OutDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">..\..\_objs\$(ProjectName)_d\$(Configuration)\</IntDir>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</LinkIncremental>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">../../../bin/Hybrid/</OutDir>
+    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">../../../bin/server/</OutDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">..\..\_objs\$(ProjectName)\$(Configuration)\</IntDir>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</LinkIncremental>
     <CodeAnalysisRuleSet Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">AllRules.ruleset</CodeAnalysisRuleSet>
@@ -54,13 +54,12 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>../../lib/dependencies/tmxparser;../../lib/dependencies/recastnavigation;../../lib/python/PC;../../lib/python/Include;../../lib;../../common;../../lib/dependencies/g3dlite;../../server;../../lib/dependencies/log4cxx/include;../../lib/dependencies;../../lib/dependencies/openssl/include;../../lib/dependencies/jsoncpp/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../lib/dependencies/tmxparser;../../lib/dependencies/recastnavigation;../../lib/python/PC;../../lib/python/Include;../../lib;../../common;../../lib/dependencies/g3dlite;../../server;../../lib/dependencies/log4cxx/src/main/include;../../lib/dependencies;../../lib/dependencies/openssl/include;../../lib/dependencies/jsoncpp/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>ENABLE_WATCHERS;WIN32;_DEBUG;_CONSOLE;Py_NO_ENABLE_SHARED;CODE_INLINE;KBE_USE_ASSERTS;USE_PYTHON;LOG4CXX_STATIC;KBE_SERVER;KBE_CELLAPP;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MinimalRebuild>true</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <PrecompiledHeader>
-      </PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
       <ObjectFileName>$(IntDir)</ObjectFileName>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).pdb</ProgramDataBaseFileName>
@@ -71,7 +70,7 @@
     <Link>
       <AdditionalOptions>/ignore:4049
 /ignore:4217 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>apr-1_d.lib;aprutil-1_d.lib;log4cxx_d.lib;expat_d.lib;tmxparser_d.lib;jsoncpp_d.lib;navigation_d.lib;_hashlib_d.pyd;pyexpat_d.pyd;select_d.pyd;_ctypes_d.pyd;_elementtree_d.pyd;unicodedata_d.pyd;_socket_d.pyd;Version.lib;netapi32.lib;resmgr_d.lib;python34_d.lib;server_d.lib;pyscript_d.lib;entitydef_d.lib;xmlplus_d.lib;cstdkbe_d.lib;helper_d.lib;math_d.lib;network_d.lib;thread_d.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>apr-1_d.lib;aprutil-1_d.lib;log4cxx_d.lib;expat_d.lib;tmxparser_d.lib;jsoncpp_d.lib;navigation_d.lib;_hashlib_d.pyd;pyexpat_d.pyd;select_d.pyd;_ctypes_d.pyd;_elementtree_d.pyd;unicodedata_d.pyd;_socket_d.pyd;Version.lib;netapi32.lib;resmgr_d.lib;python34_d.lib;server_d.lib;pyscript_d.lib;entitydef_d.lib;xmlplus_d.lib;common_d.lib;helper_d.lib;math_d.lib;network_d.lib;thread_d.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
       <AdditionalLibraryDirectories>../../libs;../../lib/dependencies/vld;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>expat_d.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
@@ -84,12 +83,11 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <AdditionalIncludeDirectories>../../lib/dependencies/tmxparser;../../lib/dependencies/recastnavigation;../../lib/python/PC;../../lib/python/Include;../../lib;../../common;../../lib/dependencies/g3dlite;../../server;../../lib/dependencies/log4cxx/include;../../lib/dependencies;../../lib/dependencies/openssl/include;../../lib/dependencies/jsoncpp/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../lib/dependencies/tmxparser;../../lib/dependencies/recastnavigation;../../lib/python/PC;../../lib/python/Include;../../lib;../../common;../../lib/dependencies/g3dlite;../../server;../../lib/dependencies/log4cxx/src/main/include;../../lib/dependencies;../../lib/dependencies/openssl/include;../../lib/dependencies/jsoncpp/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>ENABLE_WATCHERS;WIN32;NDEBUG;_CONSOLE;Py_NO_ENABLE_SHARED;CODE_INLINE;KBE_USE_ASSERTS;USE_PYTHON;LOG4CXX_STATIC;KBE_SERVER;KBE_CELLAPP;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <PrecompiledHeader>
-      </PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <AssemblerListingLocation>$(IntDir)</AssemblerListingLocation>
       <ObjectFileName>$(IntDir)</ObjectFileName>
       <ProgramDataBaseFileName>$(OutDir)$(TargetName).pdb</ProgramDataBaseFileName>
@@ -100,7 +98,7 @@
     <Link>
       <AdditionalOptions>/ignore:4049
 /ignore:4217 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>apr-1.lib;aprutil-1.lib;log4cxx.lib;expat.lib;tmxparser.lib;jsoncpp.lib;navigation.lib;_hashlib.pyd;pyexpat.pyd;select.pyd;_ctypes.pyd;_elementtree.pyd;unicodedata.pyd;_socket.pyd;Version.lib;netapi32.lib;resmgr.lib;python34.lib;server.lib;pyscript.lib;entitydef.lib;xmlplus.lib;cstdkbe.lib;helper.lib;math.lib;network.lib;thread.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>apr-1.lib;aprutil-1.lib;log4cxx.lib;expat.lib;tmxparser.lib;jsoncpp.lib;navigation.lib;_hashlib.pyd;pyexpat.pyd;select.pyd;_ctypes.pyd;_elementtree.pyd;unicodedata.pyd;_socket.pyd;Version.lib;netapi32.lib;resmgr.lib;python34.lib;server.lib;pyscript.lib;entitydef.lib;xmlplus.lib;common.lib;helper.lib;math.lib;network.lib;thread.lib;ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
       <AdditionalLibraryDirectories>../../libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <IgnoreSpecificDefaultLibraries>expat.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
@@ -154,60 +152,60 @@
     <ClCompile Include="witnessed_timeout_handler.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="all_clients.hpp" />
-    <ClInclude Include="aoi_trigger.hpp" />
-    <ClInclude Include="cell.hpp" />
-    <ClInclude Include="cellapp.hpp" />
-    <ClInclude Include="cellapp_interface.hpp" />
-    <ClInclude Include="cellapp_interface_macros.hpp" />
-    <ClInclude Include="cells.hpp" />
-    <ClInclude Include="client_entity.hpp" />
-    <ClInclude Include="client_entity_method.hpp" />
-    <ClInclude Include="clients_remote_entity_method.hpp" />
-    <ClInclude Include="controller.hpp" />
-    <ClInclude Include="controllers.hpp" />
-    <ClInclude Include="coordinate_node.hpp" />
-    <ClInclude Include="coordinate_system.hpp" />
-    <ClInclude Include="entity.hpp" />
-    <ClInclude Include="entity_coordinate_node.hpp" />
-    <ClInclude Include="entity_interface_macros.hpp" />
-    <ClInclude Include="entity_remotemethod.hpp" />
-    <ClInclude Include="entityref.hpp" />
-    <ClInclude Include="forward_message_over_handler.hpp" />
-    <ClInclude Include="ghost_manager.hpp" />
-    <ClInclude Include="history_event.hpp" />
-    <ClInclude Include="loadnavmesh_threadtasks.hpp" />
-    <ClInclude Include="move_controller.hpp" />
-    <ClInclude Include="moveto_entity_handler.hpp" />
-    <ClInclude Include="moveto_point_handler.hpp" />
-    <ClInclude Include="navigate_handler.hpp" />
-    <ClInclude Include="profile.hpp" />
-    <ClInclude Include="proximity_controller.hpp" />
-    <ClInclude Include="range_trigger.hpp" />
-    <ClInclude Include="range_trigger_node.hpp" />
-    <ClInclude Include="real_entity_method.hpp" />
-    <ClInclude Include="space.hpp" />
-    <ClInclude Include="spaces.hpp" />
-    <ClInclude Include="trap_trigger.hpp" />
-    <ClInclude Include="updatable.hpp" />
-    <ClInclude Include="updatables.hpp" />
-    <ClInclude Include="watch_obj_pools.hpp" />
-    <ClInclude Include="witness.hpp" />
-    <ClInclude Include="witnessed_timeout_handler.hpp" />
+    <ClInclude Include="all_clients.h" />
+    <ClInclude Include="aoi_trigger.h" />
+    <ClInclude Include="cell.h" />
+    <ClInclude Include="cellapp.h" />
+    <ClInclude Include="cellapp_interface.h" />
+    <ClInclude Include="cellapp_interface_macros.h" />
+    <ClInclude Include="cells.h" />
+    <ClInclude Include="client_entity.h" />
+    <ClInclude Include="client_entity_method.h" />
+    <ClInclude Include="clients_remote_entity_method.h" />
+    <ClInclude Include="controller.h" />
+    <ClInclude Include="controllers.h" />
+    <ClInclude Include="coordinate_node.h" />
+    <ClInclude Include="coordinate_system.h" />
+    <ClInclude Include="entity.h" />
+    <ClInclude Include="entity_coordinate_node.h" />
+    <ClInclude Include="entity_interface_macros.h" />
+    <ClInclude Include="entity_remotemethod.h" />
+    <ClInclude Include="entityref.h" />
+    <ClInclude Include="forward_message_over_handler.h" />
+    <ClInclude Include="ghost_manager.h" />
+    <ClInclude Include="history_event.h" />
+    <ClInclude Include="loadnavmesh_threadtasks.h" />
+    <ClInclude Include="move_controller.h" />
+    <ClInclude Include="moveto_entity_handler.h" />
+    <ClInclude Include="moveto_point_handler.h" />
+    <ClInclude Include="navigate_handler.h" />
+    <ClInclude Include="profile.h" />
+    <ClInclude Include="proximity_controller.h" />
+    <ClInclude Include="range_trigger.h" />
+    <ClInclude Include="range_trigger_node.h" />
+    <ClInclude Include="real_entity_method.h" />
+    <ClInclude Include="space.h" />
+    <ClInclude Include="spaces.h" />
+    <ClInclude Include="trap_trigger.h" />
+    <ClInclude Include="updatable.h" />
+    <ClInclude Include="updatables.h" />
+    <ClInclude Include="watch_obj_pools.h" />
+    <ClInclude Include="witness.h" />
+    <ClInclude Include="witnessed_timeout_handler.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="aoi_trigger.ipp" />
-    <None Include="coordinate_node.ipp" />
-    <None Include="coordinate_system.ipp" />
-    <None Include="entity.ipp" />
-    <None Include="range_trigger.ipp" />
-    <None Include="range_trigger_node.ipp" />
+    <None Include="aoi_trigger.inl" />
+    <None Include="coordinate_node.inl" />
+    <None Include="coordinate_system.inl" />
+    <None Include="entity.inl" />
+    <None Include="range_trigger.inl" />
+    <None Include="range_trigger_node.inl" />
     <None Include="ReadMe.txt" />
-    <None Include="trap_trigger.ipp" />
-    <None Include="witness.ipp" />
+    <None Include="trap_trigger.inl" />
+    <None Include="witness.inl" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\lib\cstdkbe\cstdkbe.vcxproj">
+    <ProjectReference Include="..\..\lib\common\common.vcxproj">
       <Project>{a04109a7-46c9-42f9-ab29-8e3d84450172}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>

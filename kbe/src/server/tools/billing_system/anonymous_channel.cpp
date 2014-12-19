@@ -17,12 +17,13 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
-#include "network/bundle.hpp"
-#include "billingsystem.hpp"
-#include "anonymous_channel.hpp"
-#include "orders.hpp"
+#include "network/bundle.h"
+#include "network/tcp_packet.h"
+#include "billingsystem.h"
+#include "anonymous_channel.h"
+#include "orders.h"
 
-#include "dbmgr/dbmgr_interface.hpp"
+#include "dbmgr/dbmgr_interface.h"
 
 namespace KBEngine{
 
@@ -77,7 +78,7 @@ bool AnonymousChannel::process()
 		return false;
 	}
 
-	Mercury::Bundle::SmartPoolObjectPtr bundle = Mercury::Bundle::createSmartPoolObj();
+	Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
 
 	while(1)
 	{
@@ -98,7 +99,7 @@ bool AnonymousChannel::process()
 		u_int16_t port;
 		u_int32_t addr;
 
-		Mercury::EndPoint* pEndpoint = listen.accept(&port, &addr);
+		Network::EndPoint* pEndpoint = listen.accept(&port, &addr);
 
 		if(pEndpoint == NULL)
 		{
@@ -108,7 +109,7 @@ bool AnonymousChannel::process()
 
 		INFO_MSG(fmt::format("AnonymousChannel::process: accept({}).\n", pEndpoint->c_str()));
 
-		Mercury::TCPPacket packet;
+		Network::TCPPacket packet;
 		packet.resize(1024);
 
 		struct timeval tv1 = { 0, 300000 }; // 300ms
@@ -142,7 +143,7 @@ bool AnonymousChannel::process()
 		packet.wpos(len);
 
 		std::string getDatas;
-		getDatas.assign((const char *)(packet.data() + packet.rpos()), packet.opsize());
+		getDatas.assign((const char *)(packet.data() + packet.rpos()), packet.length());
 		
 		std::string::size_type fi1 = getDatas.find("&chargeID=");
 		std::string::size_type fi2 = getDatas.find("&=");
@@ -188,7 +189,7 @@ thread::TPTask::TPTaskState AnonymousChannel::presentMainThread()
 			INFO_MSG(fmt::format("AnonymousChannel::presentMainThread: order({}) timeout!\n", oiter->second->ordersID));
 
 
-			Mercury::Bundle::SmartPoolObjectPtr bundle = Mercury::Bundle::createSmartPoolObj();
+			Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
 
 			(*(*bundle)).newMessage(DbmgrInterface::onChargeCB);
 			(*(*bundle)) << oiter->second->baseappID << oiter->second->ordersID << oiter->second->dbid;
@@ -200,7 +201,7 @@ thread::TPTask::TPTaskState AnonymousChannel::presentMainThread()
 			bool success = false;
 			(*(*bundle)) << success;
 
-			Mercury::Channel* pChannel = BillingSystem::getSingleton().networkInterface().findChannel(oiter->second->address);
+			Network::Channel* pChannel = BillingSystem::getSingleton().networkInterface().findChannel(oiter->second->address);
 
 			if(pChannel)
 			{
@@ -260,10 +261,10 @@ thread::TPTask::TPTaskState AnonymousChannel::presentMainThread()
 		
 		if(orderiter != orders.end())
 		{
-			Mercury::Channel* pChannel = BillingSystem::getSingleton().networkInterface().findChannel(orderiter->second->address);
+			Network::Channel* pChannel = BillingSystem::getSingleton().networkInterface().findChannel(orderiter->second->address);
 			if(pChannel)
 			{
-				Mercury::Bundle::SmartPoolObjectPtr bundle = Mercury::Bundle::createSmartPoolObj();
+				Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
 
 				(*(*bundle)).newMessage(DbmgrInterface::onChargeCB);
 				(*(*bundle)) << baseappID << ordersID << dbid;
@@ -280,16 +281,16 @@ thread::TPTask::TPTaskState AnonymousChannel::presentMainThread()
 		}
 		else
 		{
-			const Mercury::NetworkInterface::ChannelMap& channels = BillingSystem::getSingleton().networkInterface().channels();
+			const Network::NetworkInterface::ChannelMap& channels = BillingSystem::getSingleton().networkInterface().channels();
 			if(channels.size() > 0)
 			{
-				Mercury::NetworkInterface::ChannelMap::const_iterator channeliter = channels.begin();
+				Network::NetworkInterface::ChannelMap::const_iterator channeliter = channels.begin();
 				for(; channeliter != channels.end(); channeliter++)
 				{
-					Mercury::Channel* pChannel = channeliter->second;
+					Network::Channel* pChannel = channeliter->second;
 					if(pChannel)
 					{
-						Mercury::Bundle::SmartPoolObjectPtr bundle = Mercury::Bundle::createSmartPoolObj();
+						Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
 
 						(*(*bundle)).newMessage(DbmgrInterface::onChargeCB);
 						(*(*bundle)) << baseappID << ordersID << dbid;

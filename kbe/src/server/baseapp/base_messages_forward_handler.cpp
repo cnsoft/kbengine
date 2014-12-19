@@ -18,10 +18,10 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "baseapp.hpp"
-#include "base_messages_forward_handler.hpp"
-#include "network/bundle.hpp"
-#include "network/channel.hpp"
+#include "baseapp.h"
+#include "base_messages_forward_handler.h"
+#include "network/bundle.h"
+#include "network/channel.h"
 
 namespace KBEngine{	
 
@@ -32,7 +32,7 @@ pBase_(pBase),
 completed_(false),
 startForward_(false)
 {
-	Baseapp::getSingleton().networkInterface().mainDispatcher().addFrequentTask(this);
+	Baseapp::getSingleton().networkInterface().dispatcher().addFrequentTask(this);
 }
 
 //-------------------------------------------------------------------------------------
@@ -42,19 +42,19 @@ BaseMessagesForwardHandler::~BaseMessagesForwardHandler()
 		bufferedSendToCellappMessages_.size()));
 
 	if(!completed_)
-		Baseapp::getSingleton().networkInterface().mainDispatcher().cancelFrequentTask(this);
+		Baseapp::getSingleton().networkInterface().dispatcher().cancelFrequentTask(this);
 
-	std::vector<Mercury::Bundle*>::iterator iter = bufferedSendToCellappMessages_.begin();
+	std::vector<Network::Bundle*>::iterator iter = bufferedSendToCellappMessages_.begin();
 	for(; iter != bufferedSendToCellappMessages_.end(); iter++)
 	{
-		Mercury::Bundle::ObjPool().reclaimObject((*iter));
+		Network::Bundle::ObjPool().reclaimObject((*iter));
 	}
 
 	bufferedSendToCellappMessages_.clear();
 }
 
 //-------------------------------------------------------------------------------------
-void BaseMessagesForwardHandler::pushMessages(Mercury::Bundle* pBundle)
+void BaseMessagesForwardHandler::pushMessages(Network::Bundle* pBundle)
 {
 	bufferedSendToCellappMessages_.push_back(pBundle);
 }
@@ -84,10 +84,10 @@ bool BaseMessagesForwardHandler::process()
 
 	int remainPacketSize = PACKET_MAX_SIZE_TCP * 10;
 
-	std::vector<Mercury::Bundle*>::iterator iter = bufferedSendToCellappMessages_.begin();
+	std::vector<Network::Bundle*>::iterator iter = bufferedSendToCellappMessages_.begin();
 	for(; iter != bufferedSendToCellappMessages_.end(); )
 	{
-		Mercury::Bundle* pBundle = (*iter); 
+		Network::Bundle* pBundle = (*iter); 
 		remainPacketSize -= pBundle->packetsLength();
 		iter = bufferedSendToCellappMessages_.erase(iter);
 		pBase_->sendToCellapp(pBundle);

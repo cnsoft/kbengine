@@ -19,30 +19,30 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "cellapp.hpp"
-#include "space.hpp"
-#include "profile.hpp"
-#include "witness.hpp"
-#include "coordinate_node.hpp"
-#include "aoi_trigger.hpp"
-#include "watch_obj_pools.hpp"
-#include "cellapp_interface.hpp"
-#include "entity_remotemethod.hpp"
-#include "forward_message_over_handler.hpp"
-#include "network/tcp_packet.hpp"
-#include "network/udp_packet.hpp"
-#include "server/componentbridge.hpp"
-#include "server/components.hpp"
-#include "server/telnet_server.hpp"
-#include "dbmgr/dbmgr_interface.hpp"
-#include "navigation/navigation.hpp"
+#include "cellapp.h"
+#include "space.h"
+#include "profile.h"
+#include "witness.h"
+#include "coordinate_node.h"
+#include "aoi_trigger.h"
+#include "watch_obj_pools.h"
+#include "cellapp_interface.h"
+#include "entity_remotemethod.h"
+#include "forward_message_over_handler.h"
+#include "network/tcp_packet.h"
+#include "network/udp_packet.h"
+#include "server/components.h"
+#include "server/telnet_server.h"
+#include "dbmgr/dbmgr_interface.h"
+#include "navigation/navigation.h"
+#include "client_lib/client_interface.h"
 
-#include "../../server/baseappmgr/baseappmgr_interface.hpp"
-#include "../../server/cellappmgr/cellappmgr_interface.hpp"
-#include "../../server/baseapp/baseapp_interface.hpp"
-#include "../../server/cellapp/cellapp_interface.hpp"
-#include "../../server/dbmgr/dbmgr_interface.hpp"
-#include "../../server/loginapp/loginapp_interface.hpp"
+#include "../../server/baseappmgr/baseappmgr_interface.h"
+#include "../../server/cellappmgr/cellappmgr_interface.h"
+#include "../../server/baseapp/baseapp_interface.h"
+#include "../../server/cellapp/cellapp_interface.h"
+#include "../../server/dbmgr/dbmgr_interface.h"
+#include "../../server/loginapp/loginapp_interface.h"
 
 namespace KBEngine{
 	
@@ -52,8 +52,8 @@ KBE_SINGLETON_INIT(Cellapp);
 Navigation g_navigation;
 
 //-------------------------------------------------------------------------------------
-Cellapp::Cellapp(Mercury::EventDispatcher& dispatcher, 
-			 Mercury::NetworkInterface& ninterface, 
+Cellapp::Cellapp(Network::EventDispatcher& dispatcher, 
+			 Network::NetworkInterface& ninterface, 
 			 COMPONENT_TYPE componentType,
 			 COMPONENT_ID componentID):
 	EntityApp<Entity>(dispatcher, ninterface, componentType, componentID),
@@ -64,7 +64,7 @@ Cellapp::Cellapp(Mercury::EventDispatcher& dispatcher,
 	pWitnessedTimeoutHandler_(NULL),
 	pGhostManager_(NULL)
 {
-	KBEngine::Mercury::MessageHandlers::pMainMessageHandlers = &CellappInterface::messageHandlers;
+	KBEngine::Network::MessageHandlers::pMainMessageHandlers = &CellappInterface::messageHandlers;
 
 	// hook mailboxcall
 	static EntityMailbox::MailboxCallHookFunc mailboxCallHookFunc = std::tr1::bind(&Cellapp::createMailboxCallEntityRemoteMethod, this, 
@@ -85,7 +85,9 @@ bool Cellapp::canShutdown()
 	Entities<Entity>::ENTITYS_MAP::iterator iter = entities.begin();
 	for(; iter != entities.end(); iter++)
 	{
-		if(static_cast<Entity*>(iter->second.get())->baseMailbox() != NULL)
+		//Entity* pEntity = static_cast<Entity*>(iter->second.get());
+		//if(pEntity->baseMailbox() != NULL && 
+		//		pEntity->scriptModule()->isPersistent())
 		{
 			lastShutdownFailReason_ = "destroyHasBaseEntitys";
 			return false;
@@ -100,19 +102,44 @@ void Cellapp::onShutdown(bool first)
 {
 	EntityApp<Entity>::onShutdown(first);
 
-	int count = g_serverConfig.getCellApp().perSecsDestroyEntitySize;
+	uint32 count = g_serverConfig.getCellApp().perSecsDestroyEntitySize;
 	Entities<Entity>::ENTITYS_MAP& entities =  this->pEntities()->getEntities();
 
 	while(count > 0)
 	{
+		std::vector<Entity*> vecs;
+
 		bool done = false;
 		Entities<Entity>::ENTITYS_MAP::iterator iter = entities.begin();
 		for(; iter != entities.end(); iter++)
 		{
-			if(static_cast<Entity*>(iter->second.get())->baseMailbox() != NULL && 
-				static_cast<Entity*>(iter->second.get())->scriptModule()->isPersistent())
+			Entity* pEntity = static_cast<Entity*>(iter->second.get());
+			//if(pEntity->baseMailbox() != NULL && 
+			//	pEntity->scriptModule()->isPersistent())
 			{
+				Space* space = Spaces::findSpace(pEntity->spaceID());
+				if(space && space->creatorID() == pEntity->id())
+				{
+					vecs.push_back(pEntity);
+					continue;
+				}
+
 				this->destroyEntity(static_cast<Entity*>(iter->second.get())->id(), true);
+
+				count--;
+				done = true;
+				break;
+			}
+		}
+
+		// 如果count等于perSecsDestroyEntitySize说明上面已经没有可处理的东西了
+		// 剩下的应该都是space，可以开始销毁了
+		if(g_serverConfig.getCellApp().perSecsDestroyEntitySize == count && vecs.size() > 0)
+		{
+			std::vector<Entity*>::iterator iter1 = vecs.begin();
+			for(; iter1 != vecs.end(); iter1++)
+			{
+				this->destroyEntity(static_cast<Entity*>(*iter1)->id(), true);
 
 				count--;
 				done = true;
@@ -272,11 +299,11 @@ void Cellapp::finalise()
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::onGetEntityAppFromDbmgr(Mercury::Channel* pChannel, int32 uid, std::string& username, 
-						int8 componentType, uint64 componentID, int8 globalorderID, int8 grouporderID,
+void Cellapp::onGetEntityAppFromDbmgr(Network::Channel* pChannel, int32 uid, std::string& username, 
+						COMPONENT_TYPE componentType, COMPONENT_ID componentID, COMPONENT_ORDER globalorderID, COMPONENT_ORDER grouporderID,
 						uint32 intaddr, uint16 intport, uint32 extaddr, uint16 extport, std::string& extaddrEx)
 {
-	Components::ComponentInfos* cinfos = Componentbridge::getComponents().findComponent((
+	Components::ComponentInfos* cinfos = Components::getSingleton().findComponent((
 		KBEngine::COMPONENT_TYPE)componentType, uid, componentID);
 
 	if(cinfos)
@@ -297,11 +324,11 @@ void Cellapp::onGetEntityAppFromDbmgr(Mercury::Channel* pChannel, int32 uid, std
 					((int32)globalorderID), 
 					((int32)grouporderID)));
 
-			Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+			Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 			(*pBundle).newMessage(DbmgrInterface::reqKillServer);
 			(*pBundle) << g_componentID << g_componentType << KBEngine::getUsername() << KBEngine::getUserUID() << "Duplicate app-id.";
 			(*pBundle).send(this->networkInterface(), pChannel);
-			Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+			Network::Bundle::ObjPool().reclaimObject(pBundle);
 		}
 	}
 
@@ -310,16 +337,36 @@ void Cellapp::onGetEntityAppFromDbmgr(Mercury::Channel* pChannel, int32 uid, std
 
 	KBEngine::COMPONENT_TYPE tcomponentType = (KBEngine::COMPONENT_TYPE)componentType;
 
-	Components::COMPONENTS& cts = Componentbridge::getComponents().getComponents(DBMGR_TYPE);
+	Components::COMPONENTS& cts = Components::getSingleton().getComponents(DBMGR_TYPE);
 	KBE_ASSERT(cts.size() >= 1);
 	
-	cinfos = Componentbridge::getComponents().findComponent(tcomponentType, uid, componentID);
+	cinfos = Components::getSingleton().findComponent(tcomponentType, uid, componentID);
+	
+	if (cinfos == NULL)
+	{
+		ERROR_MSG(fmt::format("Cellapp::onGetEntityAppFromDbmgr: Illegal app(uid:{0}, username:{1}, componentType:{2}, "
+				"componentID:{3}, globalorderID={9}, grouporderID={10}, intaddr:{4}, intport:{5}, extaddr:{6}, extport:{7},  from {8})\n",
+				uid, 
+				username,
+				COMPONENT_NAME_EX((COMPONENT_TYPE)componentType), 
+				componentID,
+				inet_ntoa((struct in_addr&)intaddr),
+				ntohs(intport),
+				(extaddr != 0 ? inet_ntoa((struct in_addr&)extaddr) : "nonsupport"),
+				ntohs(extport),
+				pChannel->c_str(),
+				((int32)globalorderID), 
+				((int32)grouporderID)));
+
+		return;
+	}
+	
 	cinfos->pChannel = NULL;
 
 	int ret = Components::getSingleton().connectComponent(tcomponentType, uid, componentID);
 	KBE_ASSERT(ret != -1);
 
-	Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 
 	switch(tcomponentType)
 	{
@@ -343,7 +390,7 @@ void Cellapp::onGetEntityAppFromDbmgr(Mercury::Channel* pChannel, int32 uid, std
 	};
 	
 	(*pBundle).send(this->networkInterface(), cinfos->pChannel);
-	Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+	Network::Bundle::ObjPool().reclaimObject(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
@@ -383,7 +430,7 @@ PyObject* Cellapp::__py_createEntity(PyObject* self, PyObject* args)
 	}
 	
 	// 创建entity
-	Entity* pEntity = Cellapp::getSingleton().createEntityCommon(entityType, params, false, 0);
+	Entity* pEntity = Cellapp::getSingleton().createEntity(entityType, params, false, 0);
 
 	if(pEntity != NULL)
 	{
@@ -460,7 +507,7 @@ void Cellapp::executeRawDatabaseCommand(const char* datas, uint32 size, PyObject
 
 	INFO_MSG(fmt::format("KBEngine::executeRawDatabaseCommand{}:{}.\n", (eid > 0 ? fmt::format("(entityID={})", eid) : ""), datas));
 
-	Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 	(*pBundle).newMessage(DbmgrInterface::executeRawDatabaseCommand);
 	(*pBundle) << eid;
 	(*pBundle) << componentID_ << componentType_;
@@ -474,11 +521,11 @@ void Cellapp::executeRawDatabaseCommand(const char* datas, uint32 size, PyObject
 	(*pBundle) << size;
 	(*pBundle).append(datas, size);
 	(*pBundle).send(this->networkInterface(), dbmgrinfos->pChannel);
-	Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+	Network::Bundle::ObjPool().reclaimObject(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::onExecuteRawDatabaseCommandCB(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Cellapp::onExecuteRawDatabaseCommandCB(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	std::string err;
 	CALLBACK_ID callbackID = 0;
@@ -590,7 +637,7 @@ void Cellapp::onExecuteRawDatabaseCommandCB(Mercury::Channel* pChannel, KBEngine
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::reqBackupEntityCellData(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Cellapp::reqBackupEntityCellData(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	ENTITY_ID entityID = 0;
 	s >> entityID;
@@ -606,7 +653,7 @@ void Cellapp::reqBackupEntityCellData(Mercury::Channel* pChannel, KBEngine::Memo
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::reqWriteToDBFromBaseapp(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Cellapp::reqWriteToDBFromBaseapp(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	ENTITY_ID entityID = 0;
 	CALLBACK_ID callbackID = 0;
@@ -625,8 +672,8 @@ void Cellapp::reqWriteToDBFromBaseapp(Mercury::Channel* pChannel, KBEngine::Memo
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::onDbmgrInitCompleted(Mercury::Channel* pChannel, 
-		GAME_TIME gametime, ENTITY_ID startID, ENTITY_ID endID, int32 startGlobalOrder, int32 startGroupOrder, const std::string& digest)
+void Cellapp::onDbmgrInitCompleted(Network::Channel* pChannel, 
+		GAME_TIME gametime, ENTITY_ID startID, ENTITY_ID endID, COMPONENT_ORDER startGlobalOrder, COMPONENT_ORDER startGroupOrder, const std::string& digest)
 {
 	EntityApp<Entity>::onDbmgrInitCompleted(pChannel, gametime, startID, endID, startGlobalOrder, startGroupOrder, digest);
 	
@@ -645,7 +692,7 @@ void Cellapp::onDbmgrInitCompleted(Mercury::Channel* pChannel,
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::onBroadcastCellAppDataChanged(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Cellapp::onBroadcastCellAppDataChanged(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 
 	std::string key, value;
@@ -708,7 +755,7 @@ void Cellapp::onBroadcastCellAppDataChanged(Mercury::Channel* pChannel, KBEngine
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::onCreateInNewSpaceFromBaseapp(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Cellapp::onCreateInNewSpaceFromBaseapp(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	std::string entityType;
 	ENTITY_ID mailboxEntityID;
@@ -727,11 +774,11 @@ void Cellapp::onCreateInNewSpaceFromBaseapp(Mercury::Channel* pChannel, KBEngine
 	if(space != NULL)
 	{
 		// 创建entity
-		Entity* e = createEntityCommon(entityType.c_str(), NULL, false, mailboxEntityID, false);
+		Entity* e = createEntity(entityType.c_str(), NULL, false, mailboxEntityID, false);
 		
 		if(e == NULL)
 		{
-			s.opfini();
+			s.done();
 			return;
 		}
 
@@ -745,7 +792,7 @@ void Cellapp::onCreateInNewSpaceFromBaseapp(Mercury::Channel* pChannel, KBEngine
 		Components::ComponentInfos* cinfos = Components::getSingleton().findComponent(BASEAPP_TYPE, componentID);
 		if(cinfos == NULL || cinfos->pChannel == NULL)
 		{
-			Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+			Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 			ForwardItem* pFI = new ForwardItem();
 			pFI->pHandler = new FMH_Baseapp_onEntityGetCellFrom_onCreateInNewSpaceFromBaseapp(e, spaceID, cellData);
 			//Py_XDECREF(cellData);
@@ -768,11 +815,11 @@ void Cellapp::onCreateInNewSpaceFromBaseapp(Mercury::Channel* pChannel, KBEngine
 		space->creatorID(e->id());
 		space->addEntityAndEnterWorld(e);
 
-		Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 		(*pBundle).newMessage(BaseappInterface::onEntityGetCell);
 		BaseappInterface::onEntityGetCellArgs3::staticAddToBundle((*pBundle), mailboxEntityID, componentID_, spaceID);
 		(*pBundle).send(this->networkInterface(), cinfos->pChannel);
-		Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+		Network::Bundle::ObjPool().reclaimObject(pBundle);
 		return;
 	}
 	
@@ -781,7 +828,7 @@ void Cellapp::onCreateInNewSpaceFromBaseapp(Mercury::Channel* pChannel, KBEngine
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::onRestoreSpaceInCellFromBaseapp(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Cellapp::onRestoreSpaceInCellFromBaseapp(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	std::string entityType;
 	ENTITY_ID mailboxEntityID;
@@ -800,11 +847,11 @@ void Cellapp::onRestoreSpaceInCellFromBaseapp(Mercury::Channel* pChannel, KBEngi
 	if(space != NULL)
 	{
 		// 创建entity
-		Entity* e = createEntityCommon(entityType.c_str(), NULL, false, mailboxEntityID, false);
+		Entity* e = createEntity(entityType.c_str(), NULL, false, mailboxEntityID, false);
 		
 		if(e == NULL)
 		{
-			s.opfini();
+			s.done();
 			return;
 		}
 
@@ -818,7 +865,7 @@ void Cellapp::onRestoreSpaceInCellFromBaseapp(Mercury::Channel* pChannel, KBEngi
 		Components::ComponentInfos* cinfos = Components::getSingleton().findComponent(BASEAPP_TYPE, componentID);
 		if(cinfos == NULL || cinfos->pChannel == NULL)
 		{
-			Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+			Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 			ForwardItem* pFI = new ForwardItem();
 			pFI->pHandler = new FMH_Baseapp_onEntityGetCellFrom_onCreateInNewSpaceFromBaseapp(e, spaceID, cellData);
 			//Py_XDECREF(cellData);
@@ -843,11 +890,11 @@ void Cellapp::onRestoreSpaceInCellFromBaseapp(Mercury::Channel* pChannel, KBEngi
 
 		space->addEntityAndEnterWorld(e, true);
 
-		Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 		(*pBundle).newMessage(BaseappInterface::onEntityGetCell);
 		BaseappInterface::onEntityGetCellArgs3::staticAddToBundle((*pBundle), mailboxEntityID, componentID_, spaceID);
 		(*pBundle).send(this->networkInterface(), cinfos->pChannel);
-		Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+		Network::Bundle::ObjPool().reclaimObject(pBundle);
 		return;
 	}
 	
@@ -856,7 +903,25 @@ void Cellapp::onRestoreSpaceInCellFromBaseapp(Mercury::Channel* pChannel, KBEngi
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::onCreateCellEntityFromBaseapp(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Cellapp::requestRestore(Network::Channel* pChannel, KBEngine::MemoryStream& s)
+{
+	COMPONENT_ID cid;
+	s >> cid;
+
+	bool canRestore = idClient_.getSize() > 0;
+
+	DEBUG_MSG(fmt::format("Cellapp::requestRestore: cid={}, canRestore={}, channel={}.\n", 
+		cid, canRestore, pChannel->c_str()));
+
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+	(*pBundle).newMessage(BaseappInterface::onRequestRestoreCB);
+	(*pBundle) << g_componentID << cid << canRestore;
+	(*pBundle).send(this->networkInterface(), pChannel);
+	Network::Bundle::ObjPool().reclaimObject(pBundle);
+}
+
+//-------------------------------------------------------------------------------------
+void Cellapp::onCreateCellEntityFromBaseapp(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	std::string entityType;
 	ENTITY_ID createToEntityID, entityID;
@@ -880,7 +945,7 @@ void Cellapp::onCreateCellEntityFromBaseapp(Mercury::Channel* pChannel, KBEngine
 		MemoryStream* pCellData = MemoryStream::ObjPool().createObject();
 		pCellData->append(s);
 
-		Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 		ForwardItem* pFI = new ForwardItem();
 		pFI->pHandler = new FMH_Baseapp_onEntityGetCellFrom_onCreateCellEntityFromBaseapp(entityType, createToEntityID, 
 			entityID, pCellData, hasClient, inRescore, componentID, spaceID);
@@ -918,11 +983,11 @@ void Cellapp::_onCreateCellEntityFromBaseapp(std::string& entityType, ENTITY_ID 
 	{
 		ERROR_MSG("Cellapp::_onCreateCellEntityFromBaseapp: not fount spaceEntity. may have been destroyed!\n");
 
-		Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 		pBundle->newMessage(BaseappInterface::onCreateCellFailure);
 		BaseappInterface::onCreateCellFailureArgs1::staticAddToBundle(*pBundle, entityID);
 		pBundle->send(this->networkInterface(), cinfos->pChannel);
-		Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+		Network::Bundle::ObjPool().reclaimObject(pBundle);
 		return;
 	}
 
@@ -935,17 +1000,17 @@ void Cellapp::_onCreateCellEntityFromBaseapp(std::string& entityType, ENTITY_ID 
 	if(space != NULL)
 	{
 		// 告知baseapp， entity的cell创建了
-		Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 		pBundle->newMessage(BaseappInterface::onEntityGetCell);
 		BaseappInterface::onEntityGetCellArgs3::staticAddToBundle(*pBundle, entityID, componentID_, spaceID);
 		pBundle->send(this->networkInterface(), cinfos->pChannel);
-		Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+		Network::Bundle::ObjPool().reclaimObject(pBundle);
 
 		// 解包cellData信息.
 		PyObject* cellData = NULL;
 	
 		// 创建entity
-		Entity* e = createEntityCommon(entityType.c_str(), cellData, false, entityID, false);
+		Entity* e = createEntity(entityType.c_str(), cellData, false, entityID, false);
 		
 		if(e == NULL)
 		{
@@ -958,6 +1023,7 @@ void Cellapp::_onCreateCellEntityFromBaseapp(std::string& entityType, ENTITY_ID 
 		e->baseMailbox(mailbox);
 		
 		cellData = e->createCellDataFromStream(pCellData);
+		e->createNamespace(cellData);
 
 		if(hasClient)
 		{
@@ -973,15 +1039,14 @@ void Cellapp::_onCreateCellEntityFromBaseapp(std::string& entityType, ENTITY_ID 
 			e->setWitness(Witness::ObjPool().createObject());
 		}
 
-		space->addEntity(e);
-
 		if(!inRescore)
 		{
-			e->initializeEntity(cellData);
+			space->addEntity(e);
+			e->initializeScript();
 		}
 		else
 		{
-			e->createNamespace(cellData);
+			space->addEntity(e);
 			e->onRestore();
 		}
 
@@ -989,6 +1054,7 @@ void Cellapp::_onCreateCellEntityFromBaseapp(std::string& entityType, ENTITY_ID 
 		
 		// 这里增加一个引用， 因为可能在进入时被销毁
 		Py_INCREF(e);
+
 		space->addEntityToNode(e);
 		bool isDestroyed = e->isDestroyed();
 		Py_DECREF(e);
@@ -999,7 +1065,7 @@ void Cellapp::_onCreateCellEntityFromBaseapp(std::string& entityType, ENTITY_ID 
 		// 如果是有client的entity则设置它的clientmailbox, baseapp部分的onEntityGetCell会告知客户端enterworld.
 		if(hasClient)
 		{
-			e->onGetWitness(cinfos->pChannel);
+			e->onGetWitness();
 		}
 		else
 		{
@@ -1013,7 +1079,7 @@ void Cellapp::_onCreateCellEntityFromBaseapp(std::string& entityType, ENTITY_ID 
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::onDestroyCellEntityFromBaseapp(Mercury::Channel* pChannel, ENTITY_ID eid)
+void Cellapp::onDestroyCellEntityFromBaseapp(Network::Channel* pChannel, ENTITY_ID eid)
 {
 	// DEBUG_MSG("Cellapp::onDestroyCellEntityFromBaseapp:entityID=%d.\n", eid);
 	destroyEntity(eid, true);
@@ -1026,7 +1092,7 @@ RemoteEntityMethod* Cellapp::createMailboxCallEntityRemoteMethod(MethodDescripti
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::onEntityMail(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Cellapp::onEntityMail(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	ENTITY_ID eid;
 	s >> eid;
@@ -1039,24 +1105,28 @@ void Cellapp::onEntityMail(Mercury::Channel* pChannel, KBEngine::MemoryStream& s
 	if(entity == NULL)
 	{
 		ERROR_MSG(fmt::format("Cellapp::onEntityMail: entityID {} not found.\n", eid));
-		s.opfini();
+		s.done();
 		return;
 	}
 	
-	Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
-	Mercury::Bundle& bundle = *pBundle;
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+	Network::Bundle& bundle = *pBundle;
+	bool reclaim = true;
 
 	switch(mailtype)
 	{
-		case MAILBOX_TYPE_CELL:																		// 本组件是baseapp，那么确认邮件的目的地是这里， 那么执行最终操作
+		// 本组件是baseapp，那么确认邮件的目的地是这里， 那么执行最终操作
+		case MAILBOX_TYPE_CELL:	
 			entity->onRemoteMethodCall(pChannel, s);
 			break;
-		case MAILBOX_TYPE_BASE_VIA_CELL: // entity.base.cell.xxx
+
+		// entity.base.cell.xxx
+		case MAILBOX_TYPE_BASE_VIA_CELL: 
 			{
 				EntityMailboxAbstract* mailbox = static_cast<EntityMailboxAbstract*>(entity->baseMailbox());
 				if(mailbox == NULL)
 				{
-					ERROR_MSG(fmt::format("Cellapp::onEntityMail: occur a error(can't found baseMailbox)! mailboxType={}, entityID={}.\n",
+					WARNING_MSG(fmt::format("Cellapp::onEntityMail: not found baseMailbox! mailboxType={}, entityID={}.\n",
 						mailtype, eid));
 
 					break;
@@ -1064,15 +1134,18 @@ void Cellapp::onEntityMail(Mercury::Channel* pChannel, KBEngine::MemoryStream& s
 				
 				mailbox->newMail(bundle);
 				bundle.append(s);
-				mailbox->postMail(bundle);
+				mailbox->postMail(pBundle);
+				reclaim = false;
 			}
 			break;
-		case MAILBOX_TYPE_CLIENT_VIA_CELL: // entity.cell.client
+		
+		// entity.cell.client
+		case MAILBOX_TYPE_CLIENT_VIA_CELL: 
 			{
 				EntityMailboxAbstract* mailbox = static_cast<EntityMailboxAbstract*>(entity->clientMailbox());
 				if(mailbox == NULL)
 				{
-					ERROR_MSG(fmt::format("Cellapp::onEntityMail: occur a error(can't found clientMailbox)! mailboxType={}, entityID={}.\n",
+					WARNING_MSG(fmt::format("Cellapp::onEntityMail: not found clientMailbox! mailboxType={}, entityID={}.\n",
 						mailtype, eid));
 
 					break;
@@ -1080,8 +1153,9 @@ void Cellapp::onEntityMail(Mercury::Channel* pChannel, KBEngine::MemoryStream& s
 				
 				mailbox->newMail(bundle);
 				bundle.append(s);
-				s.read_skip(s.opsize());
-				mailbox->postMail(bundle);
+				s.done();
+				mailbox->postMail(pBundle);
+				reclaim = false;
 			}
 			break;
 		default:
@@ -1091,12 +1165,14 @@ void Cellapp::onEntityMail(Mercury::Channel* pChannel, KBEngine::MemoryStream& s
 			}
 	};
 
-	Mercury::Bundle::ObjPool().reclaimObject(pBundle);
-	s.opfini();
+	if(reclaim)
+		Network::Bundle::ObjPool().reclaimObject(pBundle);
+
+	s.done();
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::onRemoteCallMethodFromClient(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Cellapp::onRemoteCallMethodFromClient(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	ENTITY_ID srcEntityID, targetID;
 
@@ -1109,7 +1185,7 @@ void Cellapp::onRemoteCallMethodFromClient(Mercury::Channel* pChannel, KBEngine:
 		WARNING_MSG(fmt::format("Cellapp::onRemoteCallMethodFromClient: can't found entityID:{}, by srcEntityID:{}.\n", 
 			targetID, srcEntityID));
 		
-		s.read_skip(s.opsize());
+		s.done();
 		return;
 	}
 
@@ -1122,13 +1198,13 @@ void Cellapp::onRemoteCallMethodFromClient(Mercury::Channel* pChannel, KBEngine:
 		ERROR_MSG(fmt::format("Cellapp::onRemoteCallMethodFromClient: message is error! entityID:{}.\n", 
 			targetID));
 
-		s.read_skip(s.opsize());
+		s.done();
 		return;
 	}
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::onUpdateDataFromClient(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Cellapp::onUpdateDataFromClient(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	ENTITY_ID srcEntityID = 0;
 
@@ -1136,7 +1212,7 @@ void Cellapp::onUpdateDataFromClient(Mercury::Channel* pChannel, KBEngine::Memor
 	if(srcEntityID <= 0)
 		return;
 	
-	if(s.opsize() <= 0)
+	if(s.length() <= 0)
 		return;
 
 	KBEngine::Entity* e = findEntity(srcEntityID);	
@@ -1145,16 +1221,16 @@ void Cellapp::onUpdateDataFromClient(Mercury::Channel* pChannel, KBEngine::Memor
 	{
 		ERROR_MSG(fmt::format("Cellapp::onUpdateDataFromClient: not found entity {}!\n", srcEntityID));
 		
-		s.read_skip(s.opsize());
+		s.done();
 		return;
 	}
 
 	e->onUpdateDataFromClient(s);
-	s.read_skip(s.opsize());
+	s.done();
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::onUpdateGhostPropertys(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Cellapp::onUpdateGhostPropertys(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	ENTITY_ID entityID;
 	
@@ -1169,13 +1245,13 @@ void Cellapp::onUpdateGhostPropertys(Mercury::Channel* pChannel, KBEngine::Memor
 			COMPONENT_ID targetCell = gm->getRoute(entityID);
 			if(targetCell > 0)
 			{
-				Mercury::Bundle* pForwardBundle = Mercury::Bundle::ObjPool().createObject();
+				Network::Bundle* pForwardBundle = Network::Bundle::ObjPool().createObject();
 				(*pForwardBundle).newMessage(CellappInterface::onUpdateGhostPropertys);
 				(*pForwardBundle) << entityID;
 				pForwardBundle->append(s);
 
 				gm->pushRouteMessage(entityID, targetCell, pForwardBundle);
-				s.opfini();
+				s.done();
 				return;
 			}
 		}
@@ -1183,7 +1259,7 @@ void Cellapp::onUpdateGhostPropertys(Mercury::Channel* pChannel, KBEngine::Memor
 		ERROR_MSG(fmt::format("Cellapp::onUpdateGhostPropertys: not found entity({})\n", 
 			entityID));
 
-		s.opfini();
+		s.done();
 		return;
 	}
 
@@ -1191,7 +1267,7 @@ void Cellapp::onUpdateGhostPropertys(Mercury::Channel* pChannel, KBEngine::Memor
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::onRemoteRealMethodCall(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Cellapp::onRemoteRealMethodCall(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	ENTITY_ID entityID;
 	
@@ -1206,13 +1282,13 @@ void Cellapp::onRemoteRealMethodCall(Mercury::Channel* pChannel, KBEngine::Memor
 			COMPONENT_ID targetCell = gm->getRoute(entityID);
 			if(targetCell > 0)
 			{
-				Mercury::Bundle* pForwardBundle = Mercury::Bundle::ObjPool().createObject();
+				Network::Bundle* pForwardBundle = Network::Bundle::ObjPool().createObject();
 				(*pForwardBundle).newMessage(CellappInterface::onRemoteRealMethodCall);
 				(*pForwardBundle) << entityID;
 				pForwardBundle->append(s);
 
 				gm->pushRouteMessage(entityID, targetCell, pForwardBundle);
-				s.opfini();
+				s.done();
 				return;
 			}
 		}
@@ -1220,7 +1296,7 @@ void Cellapp::onRemoteRealMethodCall(Mercury::Channel* pChannel, KBEngine::Memor
 		ERROR_MSG(fmt::format("Cellapp::onRemoteRealMethodCall: not found entity({})\n", 
 			entityID));
 
-		s.opfini();
+		s.done();
 		return;
 	}
 
@@ -1228,7 +1304,7 @@ void Cellapp::onRemoteRealMethodCall(Mercury::Channel* pChannel, KBEngine::Memor
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::onUpdateGhostVolatileData(Mercury::Channel* pChannel, KBEngine::MemoryStream& s)
+void Cellapp::onUpdateGhostVolatileData(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	ENTITY_ID entityID;
 	
@@ -1243,13 +1319,13 @@ void Cellapp::onUpdateGhostVolatileData(Mercury::Channel* pChannel, KBEngine::Me
 			COMPONENT_ID targetCell = gm->getRoute(entityID);
 			if(targetCell > 0)
 			{
-				Mercury::Bundle* pForwardBundle = Mercury::Bundle::ObjPool().createObject();
+				Network::Bundle* pForwardBundle = Network::Bundle::ObjPool().createObject();
 				(*pForwardBundle).newMessage(CellappInterface::onUpdateGhostVolatileData);
 				(*pForwardBundle) << entityID;
 				pForwardBundle->append(s);
 
 				gm->pushRouteMessage(entityID, targetCell, pForwardBundle);
-				s.opfini();
+				s.done();
 				return;
 			}
 		}
@@ -1257,7 +1333,7 @@ void Cellapp::onUpdateGhostVolatileData(Mercury::Channel* pChannel, KBEngine::Me
 		ERROR_MSG(fmt::format("Cellapp::onUpdateGhostVolatileData: not found entity({})\n", 
 			entityID));
 
-		s.opfini();
+		s.done();
 		return;
 	}
 
@@ -1265,7 +1341,7 @@ void Cellapp::onUpdateGhostVolatileData(Mercury::Channel* pChannel, KBEngine::Me
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::forwardEntityMessageToCellappFromClient(Mercury::Channel* pChannel, MemoryStream& s)
+void Cellapp::forwardEntityMessageToCellappFromClient(Network::Channel* pChannel, MemoryStream& s)
 {
 	ENTITY_ID srcEntityID;
 
@@ -1278,7 +1354,7 @@ void Cellapp::forwardEntityMessageToCellappFromClient(Mercury::Channel* pChannel
 		WARNING_MSG(fmt::format("Cellapp::forwardEntityMessageToCellappFromClient: can't found entityID:{}.\n",
 			srcEntityID));
 		
-		s.read_skip(s.opsize());
+		s.done();
 		return;
 	}
 
@@ -1287,49 +1363,49 @@ void Cellapp::forwardEntityMessageToCellappFromClient(Mercury::Channel* pChannel
 		ERROR_MSG(fmt::format("{}::forwardEntityMessageToCellappFromClient: {} is destroyed!\n",										
 			e->scriptName(), e->id()));
 
-		s.read_skip(s.opsize());
+		s.done();
 		return;																							
 	}
 
 	// 检查是否是entity消息， 否则不合法.
-	while(s.opsize() > 0 && !e->isDestroyed())
+	while(s.length() > 0 && !e->isDestroyed())
 	{
-		Mercury::MessageID			currMsgID;
-		Mercury::MessageLength		currMsgLen;
+		Network::MessageID currMsgID;
+		Network::MessageLength currMsgLen;
 
 		s >> currMsgID;
 
-		Mercury::MessageHandler* pMsgHandler = CellappInterface::messageHandlers.find(currMsgID);
+		Network::MessageHandler* pMsgHandler = CellappInterface::messageHandlers.find(currMsgID);
 
 		if(pMsgHandler == NULL)
 		{
 			ERROR_MSG(fmt::format("Cellapp::forwardEntityMessageToCellappFromClient: invalide msgID={}, msglen={}, from {}.\n", 
 				currMsgID, s.wpos(), pChannel->c_str()));
 
-			s.read_skip(s.opsize());
+			s.done();
 			return;
 		}
 
-		if(pMsgHandler->type() != Mercury::MERCURY_MESSAGE_TYPE_ENTITY)
+		if(pMsgHandler->type() != Network::NETWORK_MESSAGE_TYPE_ENTITY)
 		{
 			WARNING_MSG(fmt::format("Cellapp::forwardEntityMessageToCellappFromClient: msgID={} not is entitymsg.\n",
 				currMsgID));
 
-			s.read_skip(s.opsize());
+			s.done();
 			return;
 		}
 
-		if((pMsgHandler->msgLen == MERCURY_VARIABLE_MESSAGE) || Mercury::g_packetAlwaysContainLength)
+		if((pMsgHandler->msgLen == NETWORK_VARIABLE_MESSAGE) || Network::g_packetAlwaysContainLength)
 			s >> currMsgLen;
 		else
 			currMsgLen = pMsgHandler->msgLen;
 
-		if(s.opsize() < currMsgLen || currMsgLen >  MERCURY_MESSAGE_MAX_SIZE / 2)
+		if(s.length() < currMsgLen || currMsgLen >  NETWORK_MESSAGE_MAX_SIZE / 2)
 		{
 			ERROR_MSG(fmt::format("Cellapp::forwardEntityMessageToCellappFromClient: msgID={}, invalide msglen={}, from {}.\n", 
 				currMsgID, s.wpos(), pChannel->c_str()));
 
-			s.read_skip(s.opsize());
+			s.done();
 			return;
 		}
 
@@ -1347,7 +1423,7 @@ void Cellapp::forwardEntityMessageToCellappFromClient(Mercury::Channel* pChannel
 			ERROR_MSG(fmt::format("Cellapp::forwardEntityMessageToCellappFromClient: message is error! entityID:{}.\n", 
 				srcEntityID));
 
-			s.read_skip(s.opsize());
+			s.done();
 			return;
 		}
 
@@ -1380,14 +1456,14 @@ bool Cellapp::removeUpdatable(Updatable* pObject)
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::lookApp(Mercury::Channel* pChannel)
+void Cellapp::lookApp(Network::Channel* pChannel)
 {
 	if(pChannel->isExternal())
 		return;
 
 	DEBUG_MSG(fmt::format("Cellapp::lookApp: {}\n", pChannel->c_str()));
 
-	Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 	
 	(*pBundle) << g_componentType;
 	(*pBundle) << componentID_;
@@ -1406,7 +1482,7 @@ void Cellapp::lookApp(Mercury::Channel* pChannel)
 
 	(*pBundle).send(networkInterface(), pChannel);
 
-	Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+	Network::Bundle::ObjPool().reclaimObject(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
@@ -1457,14 +1533,14 @@ PyObject* Cellapp::__py_isShuttingDown(PyObject* self, PyObject* args)
 PyObject* Cellapp::__py_address(PyObject* self, PyObject* args)
 {
 	PyObject* pyobj = PyTuple_New(2);
-	const Mercury::Address& addr = Cellapp::getSingleton().networkInterface().intEndpoint().addr();
+	const Network::Address& addr = Cellapp::getSingleton().networkInterface().intEndpoint().addr();
 	PyTuple_SetItem(pyobj, 0,  PyLong_FromUnsignedLong(addr.ip));
 	PyTuple_SetItem(pyobj, 1,  PyLong_FromUnsignedLong(addr.port));
 	return pyobj;
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::reqTeleportToTheCellApp(Mercury::Channel* pChannel, MemoryStream& s)
+void Cellapp::reqTeleportToCellApp(Network::Channel* pChannel, MemoryStream& s)
 {
 	size_t rpos = s.rpos();
 
@@ -1486,18 +1562,18 @@ void Cellapp::reqTeleportToTheCellApp(Mercury::Channel* pChannel, MemoryStream& 
 	{
 		s.rpos(rpos);
 
-		Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
-		(*pBundle).newMessage(CellappInterface::reqTeleportToTheCellAppCB);
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+		(*pBundle).newMessage(CellappInterface::reqTeleportToCellAppCB);
 		(*pBundle) << teleportEntityID;
 		(*pBundle) << success;
 		(*pBundle).append(&s);
 		pBundle->send(this->networkInterface(), pChannel);
-		Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+		Network::Bundle::ObjPool().reclaimObject(pBundle);
 
-		ERROR_MSG(fmt::format("Cellapp::reqTeleportToTheCellApp: not found refEntity({}), spaceID({}), reqTeleportEntity({})!\n", 
+		ERROR_MSG(fmt::format("Cellapp::reqTeleportToCellApp: not found refEntity({}), spaceID({}), reqTeleportEntity({})!\n", 
 			nearbyMBRefID, spaceID, teleportEntityID));
 
-		s.opfini();
+		s.done();
 		return;
 	}
 
@@ -1506,35 +1582,35 @@ void Cellapp::reqTeleportToTheCellApp(Mercury::Channel* pChannel, MemoryStream& 
 	{
 		s.rpos(rpos);
 
-		Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
-		(*pBundle).newMessage(CellappInterface::reqTeleportToTheCellAppCB);
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+		(*pBundle).newMessage(CellappInterface::reqTeleportToCellAppCB);
 		(*pBundle) << teleportEntityID;
 		(*pBundle) << success;
 		(*pBundle).append(&s);
 		pBundle->send(this->networkInterface(), pChannel);
-		Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+		Network::Bundle::ObjPool().reclaimObject(pBundle);
 
-		ERROR_MSG(fmt::format("Cellapp::reqTeleportToTheCellApp: not found space({}),  reqTeleportEntity({})!\n", spaceID, teleportEntityID));
-		s.opfini();
+		ERROR_MSG(fmt::format("Cellapp::reqTeleportToCellApp: not found space({}),  reqTeleportEntity({})!\n", spaceID, teleportEntityID));
+		s.done();
 		return;
 	}
 
 	// 创建entity
-	Entity* e = createEntityCommon(EntityDef::findScriptModule(entityType)->getName(), NULL, false, teleportEntityID, false);
+	Entity* e = createEntity(EntityDef::findScriptModule(entityType)->getName(), NULL, false, teleportEntityID, false);
 	if(e == NULL)
 	{
 		s.rpos(rpos);
 
-		Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
-		(*pBundle).newMessage(CellappInterface::reqTeleportToTheCellAppCB);
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+		(*pBundle).newMessage(CellappInterface::reqTeleportToCellAppCB);
 		(*pBundle) << teleportEntityID;
 		(*pBundle) << success;
 		(*pBundle).append(&s);
 		pBundle->send(this->networkInterface(), pChannel);
-		Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+		Network::Bundle::ObjPool().reclaimObject(pBundle);
 
-		ERROR_MSG(fmt::format("Cellapp::reqTeleportToTheCellApp: create reqTeleportEntity({}) is error!\n", teleportEntityID));
-		s.opfini();
+		ERROR_MSG(fmt::format("Cellapp::reqTeleportToCellApp: create reqTeleportEntity({}) is error!\n", teleportEntityID));
+		s.done();
 		return;
 	}
 	
@@ -1546,11 +1622,28 @@ void Cellapp::reqTeleportToTheCellApp(Mercury::Channel* pChannel, MemoryStream& 
 
 	COMPONENT_ID ghostCell;
 	s >> ghostCell;
-	
+
+	// 对于传送操作来说，实体传送过来就不会有ghost部分了
+	// 当前实体做出的任何改变不需要同步到原有cell，这可能会产生网络消息死循环
+	ghostCell = 0;
+
 	e->ghostCell(ghostCell);
 	e->spaceID(space->id());
 	e->setPositionAndDirection(pos, dir);
 	
+	// 进入新space之前必须通知客户端leaveSpace
+	if(e->clientMailbox())
+	{
+		Network::Bundle* pSendBundle = Network::Bundle::ObjPool().createObject();
+		Network::Bundle* pForwardBundle = Network::Bundle::ObjPool().createObject();
+		(*pForwardBundle).newMessage(ClientInterface::onEntityLeaveSpace);
+		(*pForwardBundle) << e->id();
+		NETWORK_ENTITY_MESSAGE_FORWARD_CLIENT(e->id(), (*pSendBundle), (*pForwardBundle));
+		e->clientMailbox()->postMail(pSendBundle);
+		Network::Bundle::ObjPool().reclaimObject(pForwardBundle);
+	}
+
+	// 进入新的space中
 	space->addEntityAndEnterWorld(e);
 
 	Entity* nearbyMBRef = Cellapp::getSingleton().findEntity(nearbyMBRefID);
@@ -1559,18 +1652,18 @@ void Cellapp::reqTeleportToTheCellApp(Mercury::Channel* pChannel, MemoryStream& 
 	success = true;
 	
 	{
-		Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
-		(*pBundle).newMessage(CellappInterface::reqTeleportToTheCellAppCB);
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+		(*pBundle).newMessage(CellappInterface::reqTeleportToCellAppCB);
 		(*pBundle) << g_componentID;
 		(*pBundle) << teleportEntityID;
 		(*pBundle) << success;
 		pBundle->send(this->networkInterface(), pChannel);
-		Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+		Network::Bundle::ObjPool().reclaimObject(pBundle);
 	}
 }
 
 //-------------------------------------------------------------------------------------
-void Cellapp::reqTeleportToTheCellAppCB(Mercury::Channel* pChannel, MemoryStream& s)
+void Cellapp::reqTeleportToCellAppCB(Network::Channel* pChannel, MemoryStream& s)
 {
 	ENTITY_ID nearbyMBRefID = 0, teleportEntityID = 0;
 	bool success;
@@ -1584,25 +1677,24 @@ void Cellapp::reqTeleportToTheCellAppCB(Mercury::Channel* pChannel, MemoryStream
 	{
 		if(!success)
 		{
-			ERROR_MSG(fmt::format("Cellapp::reqTeleportToTheCellAppCB: not found reqTeleportEntity({}), lose entity!\n", 
+			ERROR_MSG(fmt::format("Cellapp::reqTeleportToCellAppCB: not found reqTeleportEntity({}), lose entity!\n", 
 				teleportEntityID));
 
-			s.opfini();
+			s.done();
 			return;
 		}
 
-		s.opfini();
+		s.done();
 	}
 
 	EntityMailbox* baseMB = entity->baseMailbox();
 	if(baseMB)
 	{
-		Mercury::Bundle* pBundle = Mercury::Bundle::ObjPool().createObject();
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 		(*pBundle).newMessage(BaseappInterface::onMigrationCellappEnd);
 		(*pBundle) << baseMB->id();
 		(*pBundle) << targetCellappID;
-		baseMB->postMail((*pBundle));
-		Mercury::Bundle::ObjPool().reclaimObject(pBundle);
+		baseMB->postMail(pBundle);
 	}
 
 	// 传送成功， 我们销毁这个entity。
@@ -1626,7 +1718,7 @@ void Cellapp::reqTeleportToTheCellAppCB(Mercury::Channel* pChannel, MemoryStream
 	entity->changeToReal(0, s);
 	entity->onTeleportFailure();
 
-	s.opfini();
+	s.done();
 }
 
 //-------------------------------------------------------------------------------------

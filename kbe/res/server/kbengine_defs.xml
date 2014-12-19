@@ -112,7 +112,7 @@
 			</internal>
 			<external>
 				<interval> 10 </interval>					<!-- 毫秒 -->
-				<retries> 3 </retries>						<!-- 重试次数, 0无限(0 is unlimited) -->
+				<retries> 10 </retries>						<!-- 重试次数, 0无限(0 is unlimited) -->
 			</external>
 		</resend>
 		
@@ -384,7 +384,7 @@
 			<cprofile> false </cprofile>
 			<pyprofile> false </pyprofile>
 			<eventprofile> false </eventprofile>
-			<mercuryprofile> false </mercuryprofile>
+			<networkprofile> false </networkprofile>
 		</profiles>
 		
 		<ghostDistance> 500.0 </ghostDistance>
@@ -468,10 +468,10 @@
 		<internalInterface>  </internalInterface>
 		<externalInterface>  </externalInterface>						<!-- Type: String -->
 		
-		<!-- 外部IP地址，在某些机房的环境下，可能会使用端口映射的方式来访问内部kbe服务器，那么kbe在当前
+		<!-- 外部IP地址或者域名，在某些机房的环境下，可能会使用端口映射的方式来访问内部kbe服务器，那么kbe在当前
 			的机器上获得的外部地址可能也是局域网地址，此时某些功能将会不正常。例如：账号激活邮件中给出的回调
 			地址。
-			(External IP address, In some server environment, May use the port mapping to access KBE,
+			(External IP-address or Domain-name, In some server environment, May use the port mapping to access KBE,
 			So KBE on current machines on the external IP address may be a LAN IP address, Then some functions will not normal.
 			For example: account activation email address given callback.)
 		-->
@@ -534,7 +534,7 @@
 			<cprofile> false </cprofile>
 			<pyprofile> false </pyprofile>
 			<eventprofile> false </eventprofile>
-			<mercuryprofile> false </mercuryprofile>
+			<networkprofile> false </networkprofile>
 		</profiles>
 		
 		<!-- listen监听队列最大值
@@ -604,10 +604,10 @@
 		<internalInterface>  </internalInterface>
 		<externalInterface>  </externalInterface>						<!-- Type: String -->
 		
-		<!-- 外部IP地址，在某些机房的环境下，可能会使用端口映射的方式来访问内部kbe服务器，那么kbe在当前
+		<!-- 外部IP地址或者域名，在某些机房的环境下，可能会使用端口映射的方式来访问内部kbe服务器，那么kbe在当前
 			的机器上获得的外部地址可能也是局域网地址，此时某些功能将会不正常。例如：账号激活邮件中给出的回调
 			地址。
-			(External IP address, In some server environment, May use the port mapping to access KBE,
+			(External IP-address or Domain-name, In some server environment, May use the port mapping to access KBE,
 			So KBE on current machines on the external IP address may be a LAN IP address, Then some functions will not normal.
 			For example: account activation email address given callback.)
 		-->
@@ -718,46 +718,11 @@
 		<!-- 单个app(baseapp, cellapp, 等等..)进程上, 一个tick最多缓存的log数量
 			（The number of single-process(baseapp, cellapp, etc..), The number of log a tick buffer.） 
 		-->
-		<tick_max_buffered_logs> 65535 </tick_max_buffered_logs>
+		<tick_max_buffered_logs> 256 </tick_max_buffered_logs>
 
 		<!-- 单个app(baseapp, cellapp, 等等..)进程上, 一个tick同步给messagelog的log数量
 			（The number of single-process(baseapp, cellapp, etc..), A tick synchronization to the number of messagelog） 
 		-->
 		<tick_sync_logs> 32 </tick_sync_logs>
 	</messagelog>
-	
-	<resourcemgr>
-		<!-- 接口网卡的名称
-			（Name of the interface(NIC)） 
-		-->
-		<internalInterface>  </internalInterface>
-		
-		<downloadStreaming>
-			<bitsPerSecondTotal> 1000000 </bitsPerSecondTotal>			<!-- Type: Int -->
-			<bitsPerSecondPerClient> 100000 </bitsPerSecondPerClient>	<!-- Type: Int -->
-		</downloadStreaming>
-		
-		<!-- listen监听队列最大值
-		    (listen: Maximum listen queue)
-		 -->
-		<SOMAXCONN> 128 </SOMAXCONN>
-		
-		<respool>
-			<!-- 缓冲区大小也等于资源大小， 在这个KB大小范围以内的资源才可以进入资源池 
-				(Buffer size is equal to the size of resources, 
-				Less than the buffer resources before they can enter the resource pool)
-			-->
-			<buffer_size> 1024 </buffer_size>
-			
-			<!-- 资源池中的资源超过这个时间未被访问则销毁(秒) 
-			(Resources have not been accessed overtime will be destroyed (s))
-			-->
-			<timeout> 600 </timeout>
-			
-			<!-- 资源池检查tick(秒) 
-				(Resource pool check tick (secs))
-			-->
-			<checktick>60</checktick>
-		</respool>
-	</resourcemgr>
 </root>

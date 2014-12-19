@@ -19,10 +19,10 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#include "logwatcher.hpp"
-#include "messagelog.hpp"
-#include "cstdkbe/memorystream.hpp"
-#include "helper/console_helper.hpp"
+#include "logwatcher.h"
+#include "messagelog.h"
+#include "common/memorystream.h"
+#include "helper/console_helper.h"
 
 namespace KBEngine{
 	
@@ -42,20 +42,45 @@ void LogWatcher::reset()
 {
 	for(uint8 i =0; i<COMPONENT_END_TYPE; i++)
 	{
-		componentBitmap_[i] = 0;
+		filterOptions_.componentBitmap[i] = 0;
 	}
 	
-	logtypes_ = 0;
-	appOrder_ = 0;
+	filterOptions_.logtypes = 0;
+	filterOptions_.globalOrder = 0;
+	filterOptions_.groupOrder = 0;
+	filterOptions_.keyStr = "";
+	filterOptions_.date = "";
+
+	state_ = STATE_AUTO;
 }
 
 //-------------------------------------------------------------------------------------
-bool LogWatcher::loadFromStream(MemoryStream * s)
+bool LogWatcher::createFromStream(MemoryStream * s)
+{
+	bool ret = updateSetting(s);
+
+	bool isfind = false;
+	(*s) >> isfind;
+
+	if(isfind)
+		state_ = STATE_FINDING;
+	else
+		state_ = STATE_AUTO;
+
+	return ret;
+}
+
+//-------------------------------------------------------------------------------------
+bool LogWatcher::updateSetting(MemoryStream * s)
 {
 	reset();
 	
-	(*s) >> logtypes_;
-	(*s) >> appOrder_;
+	(*s) >> filterOptions_.logtypes;
+	(*s) >> filterOptions_.globalOrder;
+	(*s) >> filterOptions_.groupOrder;
+	(*s) >> filterOptions_.date;
+	(*s) >> filterOptions_.keyStr;
+
 	int8 count = 0;
 	(*s) >> count;
 	
@@ -63,37 +88,66 @@ bool LogWatcher::loadFromStream(MemoryStream * s)
 	{
 		COMPONENT_TYPE type;
 		(*s) >> type;
+
 		if(VALID_COMPONENT(type))
-			componentBitmap_[type] = 1;
+			filterOptions_.componentBitmap[type] = 1;
 	}
-	
+
 	return true;
 }
 
 //-------------------------------------------------------------------------------------
-void LogWatcher::onMessage(uint32 logtype, COMPONENT_TYPE componentType, COMPONENT_ID componentID, COMPONENT_ORDER componentOrder, 
-	int64 tm, GAME_TIME kbetime, const std::string& str, const std::stringstream& sstr)
+void LogWatcher::onMessage(LOG_ITEM* pLogItem)
 {
-	if(!VALID_COMPONENT(componentType) || componentBitmap_[componentType] == 0)
+	if(!VALID_COMPONENT(pLogItem->componentType) || filterOptions_.componentBitmap[pLogItem->componentType] == 0)
 		return;
 
-	if((logtypes_ & logtype) <= 0)
+	if((filterOptions_.logtypes & pLogItem->logtype) <= 0)
 		return;
 
-	if(appOrder_ > 0 && appOrder_ != componentOrder)
+	if(filterOptions_.globalOrder > 0 && filterOptions_.globalOrder != pLogItem->componentGlobalOrder)
 		return;
 
+	if(filterOptions_.groupOrder > 0 && filterOptions_.groupOrder != pLogItem->componentGroupOrder)
+		return;
 
-	Mercury::Channel* pChannel = Messagelog::getSingleton().networkInterface().findChannel(addr_);
+	Network::Channel* pChannel = Messagelog::getSingleton().networkInterface().findChannel(addr_);
 
 	if(pChannel == NULL)
 		return;
 
-	Mercury::Bundle bundle;
+	if(!validDate_(pLogItem->logstream.str()) || !containKeyworlds_(pLogItem->logstream.str()))
+		return;
+
+	Network::Bundle bundle;
 	ConsoleInterface::ConsoleLogMessageHandler msgHandler;
 	bundle.newMessage(msgHandler);
-	bundle << sstr.str().c_str();
+	bundle << pLogItem->logstream.str().c_str();
 	bundle.send(Messagelog::getSingleton().networkInterface(), pChannel);
+}
+
+//-------------------------------------------------------------------------------------
+bool LogWatcher::validDate_(const std::string& log)
+{
+	if(filterOptions_.date.size() == 0)
+		return true;
+
+	if(log.find(filterOptions_.date.c_str()) != std::string::npos)
+		return true;
+
+	return false;
+}
+
+//-------------------------------------------------------------------------------------
+bool LogWatcher::containKeyworlds_(const std::string& log)
+{
+	if(filterOptions_.keyStr.size() == 0)
+		return true;
+
+	if(log.find(filterOptions_.keyStr.c_str()) != std::string::npos)
+		return true;
+
+	return false;
 }
 
 //-------------------------------------------------------------------------------------

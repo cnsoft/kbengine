@@ -18,23 +18,23 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "orders.hpp"
-#include "billingsystem.hpp"
-#include "billing_tasks.hpp"
-#include "network/common.hpp"
-#include "network/message_handler.hpp"
-#include "thread/threadpool.hpp"
-#include "server/componentbridge.hpp"
-#include "server/components.hpp"
-#include "server/serverconfig.hpp"
+#include "orders.h"
+#include "billingsystem.h"
+#include "billing_tasks.h"
+#include "network/common.h"
+#include "network/tcp_packet.h"
+#include "network/message_handler.h"
+#include "thread/threadpool.h"
+#include "server/components.h"
+#include "server/serverconfig.h"
 #include "openssl/md5.h"
 
-#include "baseapp/baseapp_interface.hpp"
-#include "cellapp/cellapp_interface.hpp"
-#include "baseappmgr/baseappmgr_interface.hpp"
-#include "cellappmgr/cellappmgr_interface.hpp"
-#include "loginapp/loginapp_interface.hpp"
-#include "dbmgr/dbmgr_interface.hpp"
+#include "baseapp/baseapp_interface.h"
+#include "cellapp/cellapp_interface.h"
+#include "baseappmgr/baseappmgr_interface.h"
+#include "cellappmgr/cellappmgr_interface.h"
+#include "loginapp/loginapp_interface.h"
+#include "dbmgr/dbmgr_interface.h"
 
 #if KBE_PLATFORM == PLATFORM_WIN32
 #ifdef _DEBUG
@@ -87,6 +87,8 @@ void CreateAccountTask::removeLog()
 //-------------------------------------------------------------------------------------
 bool CreateAccountTask::process()
 {
+	retcode = SERVER_ERR_OP_FAILED;
+
 	if(!enable)
 	{
 		return false;
@@ -95,12 +97,12 @@ bool CreateAccountTask::process()
 	// 如果没有设置第三方服务地址则我们默认为成功
 	if(strlen(serviceAddr()) == 0)
 	{
-		success = true;
+		retcode = SERVER_SUCCESS;
 		getDatas = postDatas;
 		return false;
 	}
 
-	Mercury::EndPoint endpoint;
+	Network::EndPoint endpoint;
 	endpoint.socket(SOCK_STREAM);
 
 	if (!endpoint.good())
@@ -116,7 +118,7 @@ bool CreateAccountTask::process()
 	}
 
 	u_int32_t addr;
-	KBEngine::Mercury::EndPoint::convertAddress(serviceAddr(), addr);
+	KBEngine::Network::EndPoint::convertAddress(serviceAddr(), addr);
 
 	if(endpoint.connect(htons(servicePort()), addr) == -1)
 	{
@@ -130,11 +132,11 @@ bool CreateAccountTask::process()
 	endpoint.setnonblocking(true);
 	endpoint.setnodelay(true);
 
-	Mercury::Bundle::SmartPoolObjectPtr bundle = Mercury::Bundle::createSmartPoolObj();
+	Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
 	(*(*bundle)).append(postDatas.data(), postDatas.size());
 	(*(*bundle)).send(endpoint);
 
-	Mercury::TCPPacket packet;
+	Network::TCPPacket packet;
 	packet.resize(1024);
 
 	fd_set	frds;
@@ -162,7 +164,7 @@ bool CreateAccountTask::process()
 
 	packet.wpos(len);
 
-	getDatas.assign((const char *)(packet.data() + packet.rpos()), packet.opsize());
+	getDatas.assign((const char *)(packet.data() + packet.rpos()), packet.length());
 
 	try
 	{
@@ -173,7 +175,7 @@ bool CreateAccountTask::process()
 			MemoryStream s;
 			s.append(getDatas.data() + fi, getDatas.size() - fi);
 
-			while(s.opsize() > 0)
+			while(s.length() > 0)
 			{
 				int32 type, len;
 				s >> type >> len;
@@ -190,11 +192,11 @@ bool CreateAccountTask::process()
 
 					if(error != 0)
 					{
-						success = false;
+						retcode = SERVER_ERR_OP_FAILED;
 						endpoint.close();
 						
 						std::string err;
-						if(s.opsize() >= (sizeof(int32) * 2))
+						if(s.length() >= (sizeof(int32) * 2))
 						{
 							s >> type >> len;
 							
@@ -216,7 +218,7 @@ bool CreateAccountTask::process()
 					}
 					else
 					{
-						success = true;
+						retcode = SERVER_SUCCESS;
 					}
 
 					break;
@@ -244,7 +246,7 @@ bool CreateAccountTask::process()
 	}
 	catch(...)
 	{
-		success = false;
+		retcode = SERVER_ERR_OP_FAILED;
 		ERROR_MSG(fmt::format("BillingTask::process: {} recv is error.\n===>postdatas={}\n===>recv={}\n", 
 			commitName, postDatas, getDatas));
 	}
@@ -264,15 +266,15 @@ thread::TPTask::TPTaskState CreateAccountTask::presentMainThread()
 		return thread::TPTask::TPTASK_STATE_COMPLETED; 
 	}
 
-	Mercury::Bundle::SmartPoolObjectPtr bundle = Mercury::Bundle::createSmartPoolObj();
+	Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
 
 	(*(*bundle)).newMessage(DbmgrInterface::onCreateAccountCBFromBilling);
-	(*(*bundle)) << baseappID << commitName << accountName << password << success;
+	(*(*bundle)) << baseappID << commitName << accountName << password << retcode;
 
 	(*(*bundle)).appendBlob(postDatas);
 	(*(*bundle)).appendBlob(getDatas);
 
-	Mercury::Channel* pChannel = BillingSystem::getSingleton().networkInterface().findChannel(address);
+	Network::Channel* pChannel = BillingSystem::getSingleton().networkInterface().findChannel(address);
 
 	if(pChannel)
 	{
@@ -316,21 +318,21 @@ thread::TPTask::TPTaskState LoginAccountTask::presentMainThread()
 		return thread::TPTask::TPTASK_STATE_COMPLETED; 
 	}
 
-	Mercury::Bundle::SmartPoolObjectPtr bundle = Mercury::Bundle::createSmartPoolObj();
+	Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
 	
-	if(success)
+	if(retcode == SERVER_ERR_OP_FAILED)
 	{
 		if(accountName.size() == 0)
 			accountName = commitName;
 	}
 
 	(*(*bundle)).newMessage(DbmgrInterface::onLoginAccountCBBFromBilling);
-	(*(*bundle)) << baseappID << commitName << accountName << password << success;
+	(*(*bundle)) << baseappID << commitName << accountName << password << retcode;
 
 	(*(*bundle)).appendBlob(postDatas);
 	(*(*bundle)).appendBlob(getDatas);
 
-	Mercury::Channel* pChannel = BillingSystem::getSingleton().networkInterface().findChannel(address);
+	Network::Channel* pChannel = BillingSystem::getSingleton().networkInterface().findChannel(address);
 
 	if(pChannel)
 	{
@@ -349,7 +351,7 @@ thread::TPTask::TPTaskState LoginAccountTask::presentMainThread()
 ChargeTask::ChargeTask():
 BillingTask(),
 pOrders(NULL),
-success(false)
+retcode(SERVER_ERR_OP_FAILED)
 {
 }
 
@@ -377,7 +379,7 @@ bool ChargeTask::process()
 	// 如果是不需要请求的直接返回成功
 	if(pOrders->postDatas.size() == 0)
 	{
-		success = true;
+		retcode = SERVER_SUCCESS;
 		return false;
 	}
 
@@ -388,11 +390,11 @@ bool ChargeTask::process()
 		pOrders->getDatas = pOrders->postDatas;
 		orders.state = pOrders->state;
 		orders.getDatas = pOrders->getDatas;
-		success = true;
+		retcode = SERVER_SUCCESS;
 		return false;
 	}
 
-	Mercury::EndPoint endpoint;
+	Network::EndPoint endpoint;
 	endpoint.socket(SOCK_STREAM);
 
 	if (!endpoint.good())
@@ -412,7 +414,7 @@ bool ChargeTask::process()
 	}
 
 	u_int32_t addr;
-	KBEngine::Mercury::EndPoint::convertAddress(serviceAddr(), addr);
+	KBEngine::Network::EndPoint::convertAddress(serviceAddr(), addr);
 
 	if(endpoint.connect(htons(servicePort()), addr) == -1)
 	{
@@ -427,11 +429,11 @@ bool ChargeTask::process()
 	endpoint.setnonblocking(true);
 	endpoint.setnodelay(true);
 
-	Mercury::Bundle::SmartPoolObjectPtr bundle = Mercury::Bundle::createSmartPoolObj();
+	Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
 	(*(*bundle)).append(pOrders->postDatas.data(), pOrders->postDatas.size());
 	(*(*bundle)).send(endpoint);
 
-	Mercury::TCPPacket packet;
+	Network::TCPPacket packet;
 	packet.resize(1024);
 
 	fd_set	frds;
@@ -460,15 +462,18 @@ bool ChargeTask::process()
 
 	packet.wpos(len);
 
-	pOrders->getDatas.assign((const char *)(packet.data() + packet.rpos()), packet.opsize());
+	pOrders->getDatas.assign((const char *)(packet.data() + packet.rpos()), packet.length());
 	orders.getDatas = pOrders->getDatas;
 
 	std::string::size_type fi = pOrders->getDatas.find("retcode:1");
-	success = fi != std::string::npos;
+
+	if(fi != std::string::npos)
+		retcode = SERVER_SUCCESS;
+
 	endpoint.close();
 
 	INFO_MSG(fmt::format("ChargeTask::process: orders={}, commit={}\n==>postdatas={}\n", 
-		pOrders->ordersID, success, pOrders->getDatas));
+		pOrders->ordersID, retcode, pOrders->getDatas));
 
 	return false;
 }
@@ -477,7 +482,7 @@ bool ChargeTask::process()
 thread::TPTask::TPTaskState ChargeTask::presentMainThread()
 {
 	// 如果成功使用异步接收处理
-	if(!success)
+	if(retcode != SERVER_SUCCESS)
 	{
 		if(!BillingSystem::getSingleton().hasOrders(orders.ordersID))
 		{
@@ -487,15 +492,15 @@ thread::TPTask::TPTaskState ChargeTask::presentMainThread()
 			return thread::TPTask::TPTASK_STATE_COMPLETED;
 		}
 	
-		Mercury::Bundle::SmartPoolObjectPtr bundle = Mercury::Bundle::createSmartPoolObj();
+		Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
 
 		(*(*bundle)).newMessage(DbmgrInterface::onChargeCB);
 		(*(*bundle)) << orders.baseappID << orders.ordersID << orders.dbid;
 		(*(*bundle)).appendBlob(orders.getDatas);
 		(*(*bundle)) << orders.cbid;
-		(*(*bundle)) << success;
+		(*(*bundle)) << retcode;
 
-		Mercury::Channel* pChannel = BillingSystem::getSingleton().networkInterface().findChannel(orders.address);
+		Network::Channel* pChannel = BillingSystem::getSingleton().networkInterface().findChannel(orders.address);
 
 		if(pChannel)
 		{

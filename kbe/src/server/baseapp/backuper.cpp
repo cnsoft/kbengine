@@ -18,9 +18,9 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "baseapp.hpp"
-#include "backuper.hpp"
-#include "server/serverconfig.hpp"
+#include "baseapp.h"
+#include "backuper.h"
+#include "server/serverconfig.h"
 
 namespace KBEngine{	
 float backupPeriod = 0.0;
@@ -61,7 +61,7 @@ void Backuper::tick()
 		this->createBackupTable();
 	}
 
-	Mercury::Bundle bundle;
+	Network::Bundle bundle;
 	while((numToBackUp > 0) && !backupEntityIDs_.empty())
 	{
 		Base * pBase = Baseapp::getSingleton().findEntity(backupEntityIDs_.back());
