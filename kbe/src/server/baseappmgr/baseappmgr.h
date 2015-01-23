@@ -19,8 +19,8 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#ifndef KBE_BASEAPPMGR_HPP
-#define KBE_BASEAPPMGR_HPP
+#ifndef KBE_BASEAPPMGR_H
+#define KBE_BASEAPPMGR_H
 
 #include "baseapp.h"
 #include "server/kbemain.h"
@@ -129,6 +129,10 @@ public:
 	void sendAllocatedBaseappAddr(Network::Channel* pChannel, 
 								  std::string& loginName, std::string& accountName, 
 								  const std::string& addr, uint16 port);
+
+	bool componentsReady();
+	bool componentReady(COMPONENT_ID cid);
+
 protected:
 	TimerHandle													gameTimer_;
 
@@ -145,4 +149,4 @@ protected:
 
 }
 
-#endif // KBE_BASEAPPMGR_HPP
+#endif // KBE_BASEAPPMGR_H

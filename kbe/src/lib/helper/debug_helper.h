@@ -19,8 +19,8 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#ifndef KBE_DEBUG_HPP
-#define KBE_DEBUG_HPP
+#ifndef KBE_DEBUG_H
+#define KBE_DEBUG_H
 
 #include <assert.h>
 #include <time.h>	
@@ -162,12 +162,16 @@ public:
 
 	void onMessage(uint32 logType, const char * str, uint32 length);
 
-	void registerMessagelog(Network::MessageID msgID, Network::Address* pAddr);
-	void unregisterMessagelog(Network::MessageID msgID, Network::Address* pAddr);
+	void registerLogger(Network::MessageID msgID, Network::Address* pAddr);
+	void unregisterLogger(Network::MessageID msgID, Network::Address* pAddr);
 
-	void changeLogger(std::string name);
+	void changeLogger(const std::string& name);
 
 	void clearBufferedLog(bool destroy = false);
+
+	void set_errorcolor();
+	void set_normalcolor();
+	void set_warningcolor();
 
 	void setScriptMsgType(int msgtype);
 	void resetScriptMsgType();
@@ -175,7 +179,7 @@ public:
 	void shouldWriteToSyslog(bool v = true);
 
 	/** 
-		同步日志到messagelog
+		同步日志到logger
 	*/
 	void sync();
 private:
@@ -183,7 +187,7 @@ private:
 	std::string _currFile, _currFuncName;
 	uint32 _currLine;
 
-	Network::Address messagelogAddr_;
+	Network::Address loggerAddr_;
 	KBEngine::thread::ThreadMutex logMutex;
 
 	std::queue< Network::Bundle* > bufferedLogPackets_;
@@ -239,4 +243,4 @@ void myassert(const char* exp, const char * func, const char * file, unsigned in
 
 }
 
-#endif // KBE_DEBUG_HPP
+#endif // KBE_DEBUG_H

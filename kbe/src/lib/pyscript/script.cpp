@@ -39,15 +39,22 @@ namespace KBEngine{
 KBE_SINGLETON_INIT(script::Script);
 namespace script{
 
-#ifndef KBE_SINGLE_THREADED
-static PyObject * s_pOurInitTimeModules;
-static PyThreadState * s_pMainThreadState;
-static PyThreadState* s_defaultContext;
-#endif
-
 //-------------------------------------------------------------------------------------
 static PyObject* __py_genUUID64(PyObject *self, void *closure)	
 {
+	static int8 check = -1;
+
+	if(check < 0)
+	{
+		if(g_componentGlobalOrder <= 0 || g_componentGlobalOrder > 65535)
+		{
+			WARNING_MSG(fmt::format("globalOrder({}) is not in the range of 0~65535, genUUID64 is not safe, "
+				"in the multi process may be repeated.\n", g_componentGlobalOrder));
+		}
+
+		check = 1;
+	}
+
 	return PyLong_FromUnsignedLongLong(genUUID64());
 }
 
@@ -56,7 +63,7 @@ PyObject * PyTuple_FromStringVector(const std::vector< std::string > & v)
 {
 	int sz = v.size();
 	PyObject * t = PyTuple_New( sz );
-	for (int i = 0; i < sz; i++)
+	for (int i = 0; i < sz; ++i)
 	{
 		PyTuple_SetItem( t, i, PyUnicode_FromString( v[i].c_str() ) );
 	}
@@ -209,16 +216,6 @@ bool Script::install(const wchar_t* pythonHomeDir, std::wstring pyPaths,
 		return false;
 	}
 
-#ifndef KBE_SINGLE_THREADED
-	s_pOurInitTimeModules = PyDict_Copy( PySys_GetObject( "modules" ) );
-	s_pMainThreadState = PyThreadState_Get();
-	s_defaultContext = s_pMainThreadState;
-	PyEval_InitThreads();
-
-	KBEConcurrency::setMainThreadIdleFunctions(
-		&Script::releaseLock, &Script::acquireLock );
-#endif
-
 	// 安装py重定向模块
 	ScriptStdOut::installScript(NULL);												
 	ScriptStdErr::installScript(NULL);	
@@ -289,14 +286,6 @@ bool Script::uninstall()
 		return false;
 	}
 
-#ifndef KBE_SINGLE_THREADED
-	if (s_pOurInitTimeModules != NULL)
-	{
-		Py_DECREF(s_pOurInitTimeModules);
-		s_pOurInitTimeModules = NULL;
-	}
-#endif
-
 	PyGC::initialize();
 
 	// 卸载python解释器
@@ -331,9 +320,7 @@ bool Script::installExtraModule(const char* moduleName)
 //-------------------------------------------------------------------------------------
 bool Script::registerExtraMethod(const char* attrName, PyMethodDef* pyFunc)
 {
-	PyObject* obj = PyCFunction_New(pyFunc, NULL);
-	bool ret = PyModule_AddObject(extraModule_, attrName, obj) != -1;
-	return ret;
+	return PyModule_AddObject(extraModule_, attrName, PyCFunction_New(pyFunc, NULL)) != -1;
 }
 
 //-------------------------------------------------------------------------------------
@@ -355,142 +342,6 @@ int Script::unregisterToModule(const char* attrName)
 		return 0;
 
 	return PyObject_DelAttrString(module_, attrName);
-}
-
-//-------------------------------------------------------------------------------------
-PyThreadState* Script::createInterpreter()
-{
-	PyThreadState* 	pCurInterpreter = PyThreadState_Get();
-	PyObject * 		pCurPath = PySys_GetObject( "path" );
-
-	PyThreadState* pNewInterpreter = Py_NewInterpreter();
-	if (pNewInterpreter)
-	{
-		PySys_SetObject( "path", pCurPath );
-#ifndef KBE_SINGLE_THREADED
-		PyDict_Merge( PySys_GetObject( "modules" ), s_pOurInitTimeModules, 0 );
-#endif
-
-		PyThreadState* pSwapped = PyThreadState_Swap( pCurInterpreter );
-		if( pSwapped != pNewInterpreter )
-		{
-			KBE_EXIT( "error creating new python interpreter" );
-		}
-	}
-
-	return pNewInterpreter;
-}
-
-//-------------------------------------------------------------------------------------
-void Script::destroyInterpreter( PyThreadState* pInterpreter )
-{
-	if( pInterpreter == PyThreadState_Get() )
-	{
-		KBE_EXIT( "trying to destroy current interpreter" );
-	}
-
-	PyInterpreterState_Clear( pInterpreter->interp );
-	PyInterpreterState_Delete( pInterpreter->interp );
-}
-
-//-------------------------------------------------------------------------------------
-PyThreadState* Script::swapInterpreter( PyThreadState* pInterpreter )
-{
-#ifndef KBE_SINGLE_THREADED
-	s_defaultContext = pInterpreter;
-#endif
-	return PyThreadState_Swap( pInterpreter );
-}
-
-//-------------------------------------------------------------------------------------
-#ifndef KBE_SINGLE_THREADED
-void Script::initThread( bool plusOwnInterpreter )
-{
-	if( s_defaultContext != NULL )
-	{
-		KBE_EXIT( "trying to initialise scripting when already initialised" );
-	}
-
-	PyEval_AcquireLock();
-
-	PyThreadState * newTState = NULL;
-
-	if (plusOwnInterpreter)
-	{
-		newTState = Py_NewInterpreter();
-
-		PyObject * pMainPyPath = PyDict_GetItemString(
-			s_pMainThreadState->interp->sysdict, "path" );
-		PySys_SetObject( "path", pMainPyPath );
-
-		PyDict_Merge( PySys_GetObject( "modules" ), s_pOurInitTimeModules, 0);
-	}
-	else
-	{
-		newTState = PyThreadState_New( s_pMainThreadState->interp );
-	}
-
-	if( newTState == NULL )
-	{
-		KBE_EXIT( "failed to create a new thread object" );
-	}
-
-	PyEval_ReleaseLock();
-
-	s_defaultContext = newTState;
-	Script::acquireLock();
-}
-
-//-------------------------------------------------------------------------------------
-void Script::finiThread( bool plusOwnInterpreter )
-{
-	if( s_defaultContext != PyThreadState_Get() )
-	{
-		KBE_EXIT( "trying to finalise script thread when not in default context" );
-	}
-
-	if (plusOwnInterpreter)
-	{
-		{
-			PyInterpreterState_Clear( s_defaultContext->interp );
-			PyThreadState_Swap( NULL );
-			PyInterpreterState_Delete( s_defaultContext->interp );
-		}
-
-		PyEval_ReleaseLock();
-	}
-	else
-	{
-		PyThreadState_Clear( s_defaultContext );
-
-		// releases GIL
-		PyThreadState_DeleteCurrent();								
-	}
-
-	s_defaultContext = NULL;
-}
-
-#endif
-
-//-------------------------------------------------------------------------------------
-void Script::acquireLock()
-{
-#ifndef KBE_SINGLE_THREADED
-	if (s_defaultContext == NULL) return;
-
-	PyEval_RestoreThread( s_defaultContext );
-#endif
-}
-
-//-------------------------------------------------------------------------------------
-void Script::releaseLock()
-{
-#ifndef KBE_SINGLE_THREADED
-	if (s_defaultContext == NULL) return;
-
-	PyThreadState * oldState = PyEval_SaveThread();
-	KBE_ASSERT(oldState == s_defaultContext && "releaseLock: default context is incorrect");
-#endif
 }
 
 //-------------------------------------------------------------------------------------

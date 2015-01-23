@@ -19,8 +19,8 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#ifndef KBE_ENTITYDEF_HPP
-#define KBE_ENTITYDEF_HPP
+#ifndef KBE_ENTITYDEF_H
+#define KBE_ENTITYDEF_H
 
 #include "common/common.h"
 #include "common/md5.h"
@@ -33,7 +33,7 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 #include "property.h"
 #include "math/math.h"
 #include "pyscript/scriptobject.h"
-#include "xmlplus/xmlplus.h"	
+#include "xml/xml.h"	
 #include "common/smartpointer.h"
 //#define NDEBUG
 // windows include	
@@ -73,57 +73,57 @@ public:
 		std::vector<PyTypeObject*>& scriptBaseTypes);
 
 	static bool loadAllDefDescriptions(const std::string& moduleName, 
-		XmlPlus* defxml, 
+		XML* defxml, 
 		TiXmlNode* defNode, 
 		ScriptDefModule* scriptModule);
 
 	static bool loadDefPropertys(const std::string& moduleName, 
-		XmlPlus* xml, 
+		XML* xml, 
 		TiXmlNode* defPropertyNode, 
 		ScriptDefModule* scriptModule);
 
 	static bool loadDefCellMethods(const std::string& moduleName, 
-		XmlPlus* xml, 
+		XML* xml, 
 		TiXmlNode* defMethodNode, 
 		ScriptDefModule* scriptModule);
 
 	static bool loadDefBaseMethods(const std::string& moduleName, 
-		XmlPlus* xml, 
+		XML* xml, 
 		TiXmlNode* defMethodNode, 
 		ScriptDefModule* scriptModule);
 
 	static bool loadDefClientMethods(const std::string& moduleName, 
-		XmlPlus* xml, 
+		XML* xml, 
 		TiXmlNode* defMethodNode, 
 		ScriptDefModule* scriptModule);
 
 	static bool loadInterfaces(const std::string& defFilePath, 
 		const std::string& moduleName, 
-		XmlPlus* defxml, 
+		XML* defxml, 
 		TiXmlNode* defNode, 
 		ScriptDefModule* scriptModule);
 
 	static bool loadParentClass(const std::string& defFilePath, 
 		const std::string& moduleName, 
-		XmlPlus* defxml, 
+		XML* defxml, 
 		TiXmlNode* defNode, 
 		ScriptDefModule* scriptModule);
 
 	static bool loadDefInfo(const std::string& defFilePath, 
 		const std::string& moduleName, 
-		XmlPlus* defxml, 
+		XML* defxml, 
 		TiXmlNode* defNode, 
 		ScriptDefModule* scriptModule);
 
 	static bool loadDetailLevelInfo(const std::string& defFilePath, 
 		const std::string& moduleName, 
-		XmlPlus* defxml, 
+		XML* defxml, 
 		TiXmlNode* defNode, 
 		ScriptDefModule* scriptModule);
 
 	static bool loadVolatileInfo(const std::string& defFilePath, 
 		const std::string& moduleName, 
-		XmlPlus* defxml, 
+		XML* defxml, 
 		TiXmlNode* defNode, 
 		ScriptDefModule* scriptModule);
 
@@ -185,6 +185,7 @@ public:
 	{ 
 		return __entitydefAliasID && __scriptModules.size() <= 255; 
 	}
+
 private:
 	static SCRIPT_MODULES __scriptModules;										// 所有的扩展脚本模块都存储在这里
 	static SCRIPT_MODULES __oldScriptModules;									// reload时旧的模块会放到这里用于判断
@@ -209,5 +210,5 @@ private:
 #ifdef CODE_INLINE
 #include "entitydef.inl"
 #endif
-#endif // KBE_ENTITYDEF_HPP
+#endif // KBE_ENTITYDEF_H
 

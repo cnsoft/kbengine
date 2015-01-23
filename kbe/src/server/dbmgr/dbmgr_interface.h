@@ -20,12 +20,12 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 
 
 #if defined(DEFINE_IN_INTERFACE)
-	#undef KBE_DBMGR_INTERFACE_HPP
+	#undef KBE_DBMGR_INTERFACE_H
 #endif
 
 
-#ifndef KBE_DBMGR_INTERFACE_HPP
-#define KBE_DBMGR_INTERFACE_HPP
+#ifndef KBE_DBMGR_INTERFACE_H
+#define KBE_DBMGR_INTERFACE_H
 
 // common include	
 #if defined(DBMGR)
@@ -85,11 +85,11 @@ NETWORK_INTERFACE_DECLARE_BEGIN(DbmgrInterface)
 
 	// loginapp«Î«Û¥¥Ω®’À∫≈°£
 	DBMGR_MESSAGE_DECLARE_STREAM(reqCreateAccount,					NETWORK_VARIABLE_MESSAGE)
-	DBMGR_MESSAGE_DECLARE_STREAM(onCreateAccountCBFromBilling,		NETWORK_VARIABLE_MESSAGE)
+	DBMGR_MESSAGE_DECLARE_STREAM(onCreateAccountCBFromInterfaces,	NETWORK_VARIABLE_MESSAGE)
 
 	// µ«¬Ω’À∫≈°£
 	DBMGR_MESSAGE_DECLARE_STREAM(onAccountLogin,					NETWORK_VARIABLE_MESSAGE)
-	DBMGR_MESSAGE_DECLARE_STREAM(onLoginAccountCBBFromBilling,		NETWORK_VARIABLE_MESSAGE)
+	DBMGR_MESSAGE_DECLARE_STREAM(onLoginAccountCBBFromInterfaces,	NETWORK_VARIABLE_MESSAGE)
 
 	// baseapp≤È—Ø’À∫≈–≈œ¢°£
 	DBMGR_MESSAGE_DECLARE_ARGS7(queryAccount,						NETWORK_VARIABLE_MESSAGE,

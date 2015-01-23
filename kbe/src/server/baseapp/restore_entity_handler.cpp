@@ -43,17 +43,17 @@ spaceIDs_(),
 cellappID_(cellappID),
 canRestore_(false)
 {
-	// networkInterface_.mainDispatcher().addFrequentTask(this);
+	// networkInterface_.dispatcher().addTask(this);
 }
 
 //-------------------------------------------------------------------------------------
 RestoreEntityHandler::~RestoreEntityHandler()
 {
 	if(inProcess_)
-		networkInterface_.dispatcher().cancelFrequentTask(this);
+		networkInterface_.dispatcher().cancelTask(this);
 
 	std::vector<RestoreData>::iterator restoreSpacesIter = otherRestoredSpaces_.begin();
-	for(; restoreSpacesIter != otherRestoredSpaces_.end(); restoreSpacesIter++)
+	for(; restoreSpacesIter != otherRestoredSpaces_.end(); ++restoreSpacesIter)
 	{
 		if((*restoreSpacesIter).cell)
 		{
@@ -97,7 +97,7 @@ void RestoreEntityHandler::pushEntity(ENTITY_ID id)
 	if(!inProcess_)
 	{
 		inProcess_ = true;
-		networkInterface_.dispatcher().addFrequentTask(this);
+		networkInterface_.dispatcher().addTask(this);
 	}
 
 	tickReport_ = timestamp();
@@ -134,8 +134,7 @@ bool RestoreEntityHandler::process()
 			Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 			(*pBundle).newMessage(CellappInterface::requestRestore);
 			(*pBundle) << cellappID();
-			(*pBundle).send(Baseapp::getSingleton().networkInterface(), pChannel);
-			Network::Bundle::ObjPool().reclaimObject(pBundle);
+			pChannel->send(pBundle);
 		}
 
 		return true;
@@ -161,7 +160,7 @@ bool RestoreEntityHandler::process()
 
 		// ±ØÐëµÈ´ýspace»Ö¸´
 		std::vector<RestoreData>::iterator restoreSpacesIter = restoreSpaces_.begin();
-		for(; restoreSpacesIter != restoreSpaces_.end(); restoreSpacesIter++)
+		for(; restoreSpacesIter != restoreSpaces_.end(); ++restoreSpacesIter)
 		{
 			Base* pBase = Baseapp::getSingleton().findEntity((*restoreSpacesIter).id);
 			
@@ -211,7 +210,7 @@ bool RestoreEntityHandler::process()
 			INFO_MSG(fmt::format("RestoreEntityHandler::process({}): begin broadcast-spaceGetCell to otherBaseapps...\n", cellappID_));
 
 			std::vector<RestoreData>::iterator restoreSpacesIter = restoreSpaces_.begin();
-			for(; restoreSpacesIter != restoreSpaces_.end(); restoreSpacesIter++)
+			for(; restoreSpacesIter != restoreSpaces_.end(); ++restoreSpacesIter)
 			{
 				Base* pBase = Baseapp::getSingleton().findEntity((*restoreSpacesIter).id);
 				bool destroyed = (pBase == NULL || pBase->isDestroyed());
@@ -232,7 +231,7 @@ bool RestoreEntityHandler::process()
 				Network::Channel* pChannel = NULL;
 				Components::COMPONENTS& cts = Components::getSingleton().getComponents(BASEAPP_TYPE);
 				Components::COMPONENTS::iterator comsiter = cts.begin();
-				for(; comsiter != cts.end(); comsiter++)
+				for(; comsiter != cts.end(); ++comsiter)
 				{
 					pChannel = (*comsiter).pChannel;
 					
@@ -244,8 +243,7 @@ bool RestoreEntityHandler::process()
 						Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 						(*pBundle).newMessage(BaseappInterface::onRestoreSpaceCellFromOtherBaseapp);
 						(*pBundle) << baseappID << cellappID << spaceID << spaceEntityID << utype << destroyed;
-						pBundle->send(Baseapp::getSingleton().networkInterface(), pChannel);
-						Network::Bundle::ObjPool().reclaimObject(pBundle);
+						pChannel->send(pBundle);
 					}
 				}
 			}
@@ -296,7 +294,7 @@ bool RestoreEntityHandler::process()
 					
 					EntityMailboxAbstract* cellMailbox = NULL;
 					std::vector<RestoreData>::iterator restoreSpacesIter = restoreSpaces_.begin();
-					for(; restoreSpacesIter != restoreSpaces_.end(); restoreSpacesIter++)
+					for(; restoreSpacesIter != restoreSpaces_.end(); ++restoreSpacesIter)
 					{
 						Base* pSpace = Baseapp::getSingleton().findEntity((*restoreSpacesIter).id);
 						if(pSpace && pBase->spaceID() == pSpace->spaceID())
@@ -309,7 +307,7 @@ bool RestoreEntityHandler::process()
 					if(cellMailbox == NULL)
 					{
 						restoreSpacesIter = otherRestoredSpaces_.begin();
-						for(; restoreSpacesIter != otherRestoredSpaces_.end(); restoreSpacesIter++)
+						for(; restoreSpacesIter != otherRestoredSpaces_.end(); ++restoreSpacesIter)
 						{
 							if(pBase->spaceID() == (*restoreSpacesIter).spaceID && (*restoreSpacesIter).cell)
 							{
@@ -350,7 +348,7 @@ bool RestoreEntityHandler::process()
 	if(entities_.size() == 0)
 	{
 		std::vector<RestoreData>::iterator restoreSpacesIter = otherRestoredSpaces_.begin();
-		for(; restoreSpacesIter != otherRestoredSpaces_.end(); restoreSpacesIter++)
+		for(; restoreSpacesIter != otherRestoredSpaces_.end(); ++restoreSpacesIter)
 		{
 			if((*restoreSpacesIter).cell)
 			{

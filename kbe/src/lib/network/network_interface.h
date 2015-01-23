@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_NETWORK_INTERFACE_HPP
-#define KBE_NETWORK_INTERFACE_HPP
+#ifndef KBE_NETWORK_INTERFACE_H
+#define KBE_NETWORK_INTERFACE_H
 
 #include "common/memorystream.h"
 #include "network/common.h"
@@ -49,7 +49,7 @@ public:
 	static const char * USE_KBEMACHINED;
 	typedef std::map<Address, Channel *>	ChannelMap;
 	
-	NetworkInterface(EventDispatcher * pMainDispatcher,
+	NetworkInterface(EventDispatcher * pDispatcher,
 		int32 extlisteningPort_min = -1, int32 extlisteningPort_max = -1, const char * extlisteningInterface = "",
 		uint32 extrbuffer = 0, uint32 extwbuffer = 0, 
 		int32 intlisteningPort = 0, const char * intlisteningInterface = "",
@@ -65,7 +65,6 @@ public:
 
 	bool registerChannel(Channel* pChannel);
 	bool deregisterChannel(Channel* pChannel);
-	bool deregisterChannel(const Address & addr);
 	bool deregisterAllChannels();
 	Channel * findChannel(const Address & addr);
 	Channel * findChannel(int fd);
@@ -96,17 +95,10 @@ public:
 	const ChannelMap& channels(void) { return channelMap_; }
 		
 	/** 发送相关 */
-	Reason send(Bundle & bundle, Channel * pChannel = NULL);
-	Reason sendPacket(Packet * pPacket, Channel * pChannel = NULL);
 	void sendIfDelayed(Channel & channel);
 	void delayedSend(Channel & channel);
-	Reason basicSendSingleTry(Channel * pChannel, Packet * pPacket);
-	Reason basicSendWithRetries(Channel * pChannel, Packet * pPacket);
 	
 	bool good() const{ return (!isExternal() || extEndpoint_.good()) && (intEndpoint_.good()); }
-
-	void onPacketIn(const Packet & packet);
-	void onPacketOut(const Packet & packet);
 
 	void onChannelGone(Channel * pChannel);
 	void onChannelTimeOut(Channel * pChannel);
@@ -115,11 +107,6 @@ public:
 		处理所有消息包  
 	*/
 	void processAllChannelPackets(KBEngine::Network::MessageHandlers* pMsgHandlers);
-
-	/* 
-		获取一次send或者sendto操作产生错误的原因 
-	*/
-	static Reason getSendErrorReason(const EndPoint * endpoint, int retSendSize, int packetTotalSize);
 
 	INLINE int32 numExtChannels() const;
 private:
@@ -154,4 +141,4 @@ private:
 #ifdef CODE_INLINE
 #include "network_interface.inl"
 #endif
-#endif // KBE_NETWORK_INTERFACE_HPP
+#endif // KBE_NETWORK_INTERFACE_H

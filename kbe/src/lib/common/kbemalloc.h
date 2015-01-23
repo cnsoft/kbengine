@@ -20,9 +20,12 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 
 /*
 */
-#ifndef KBE_MEMORY_MALLOC_HPP
-#define KBE_MEMORY_MALLOC_HPP
+#ifndef KBE_MEMORY_MALLOC_H
+#define KBE_MEMORY_MALLOC_H
 
+#ifdef USE_JEMALLOC
+#include "jemalloc/jemalloc.h"
+#endif
 
 //#define USE_KBE_MALLOC				
 //#define KBE_MALLOC_ALIGN			16

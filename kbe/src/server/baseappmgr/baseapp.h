@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_BASEAPPMGR_BASEAPP_HPP
-#define KBE_BASEAPPMGR_BASEAPP_HPP
+#ifndef KBE_BASEAPPMGR_BASEAPP_H
+#define KBE_BASEAPPMGR_BASEAPP_H
 
 #include "common/common.h"
 #include "helper/debug_helper.h"
@@ -47,6 +47,9 @@ public:
 
 	float initProgress()const{ return initProgress_; }
 	void initProgress(float v){ initProgress_ = v; }
+
+	ENTITY_ID numEntities()const { return numBases_ + numProxices_; }
+
 protected:
 	ENTITY_ID numBases_;
 	ENTITY_ID numProxices_;
@@ -61,4 +64,4 @@ protected:
 
 }
 
-#endif // KBE_BASEAPPMGR_BASEAPP_HPP
+#endif // KBE_BASEAPPMGR_BASEAPP_H

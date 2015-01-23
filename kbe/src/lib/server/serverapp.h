@@ -19,8 +19,8 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#ifndef KBE_SERVER_APP_HPP
-#define KBE_SERVER_APP_HPP
+#ifndef KBE_SERVER_APP_H
+#define KBE_SERVER_APP_H
 
 // common include
 #include "common/common.h"
@@ -34,7 +34,7 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 #include "helper/profile.h"
 #include "helper/profiler.h"
 #include "helper/profile_handler.h"
-#include "xmlplus/xmlplus.h"	
+#include "xml/xml.h"	
 #include "server/common.h"
 #include "server/components.h"
 #include "server/serverconfig.h"
@@ -110,7 +110,7 @@ public:
 
 	thread::ThreadPool& threadPool(){ return threadPool_; }
 
-	Network::EventDispatcher & mainDispatcher()				{ return mainDispatcher_; }
+	Network::EventDispatcher & dispatcher()				{ return dispatcher_; }
 	Network::NetworkInterface & networkInterface()			{ return networkInterface_; }
 
 	COMPONENT_ID componentID()const	{ return componentID_; }
@@ -202,7 +202,7 @@ protected:
 	COMPONENT_TYPE											componentType_;
 	COMPONENT_ID											componentID_;									// 本组件的ID
 
-	Network::EventDispatcher& 								mainDispatcher_;	
+	Network::EventDispatcher& 								dispatcher_;	
 	Network::NetworkInterface&								networkInterface_;
 	
 	Timers													timers_;
@@ -221,4 +221,4 @@ protected:
 
 }
 
-#endif // KBE_SERVER_APP_HPP
+#endif // KBE_SERVER_APP_H

@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_PY_FILE_DESCRIPTOR_HPP
-#define KBE_PY_FILE_DESCRIPTOR_HPP
+#ifndef KBE_PY_FILE_DESCRIPTOR_H
+#define KBE_PY_FILE_DESCRIPTOR_H
 
 #include "common/common.h"
 #include "pyscript/scriptobject.h"
@@ -28,7 +28,7 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 namespace KBEngine{
 typedef SmartPointer<PyObject> PyObjectPtr;
 
-class PyFileDescriptor : public Network::InputNotificationHandler
+class PyFileDescriptor : public Network::InputNotificationHandler, public Network::OutputNotificationHandler
 {
 public:
 	PyFileDescriptor(int fd, PyObject* pyCallback, bool write);
@@ -37,14 +37,15 @@ public:
 	/** 
 		脚本请求(注册/注销)文件描述符(读和写)
 	*/
-	static PyObject* __py_registerFileDescriptor(PyObject* self, PyObject* args);
+	static PyObject* __py_registerReadFileDescriptor(PyObject* self, PyObject* args);
 	static PyObject* __py_registerWriteFileDescriptor(PyObject* self, PyObject* args);
-	static PyObject* __py_deregisterFileDescriptor(PyObject* self, PyObject* args);
+	static PyObject* __py_deregisterReadFileDescriptor(PyObject* self, PyObject* args);
 	static PyObject* __py_deregisterWriteFileDescriptor(PyObject* self, PyObject* args);
 protected:
 
 	virtual int handleInputNotification( int fd );
-	
+	virtual int handleOutputNotification( int fd );
+
 	void callback();
 
 	int fd_;
@@ -55,4 +56,4 @@ protected:
 
 }
 
-#endif // KBE_PY_FILE_DESCRIPTOR_HPP
+#endif // KBE_PY_FILE_DESCRIPTOR_H

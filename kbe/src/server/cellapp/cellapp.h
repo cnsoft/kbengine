@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_CELLAPP_HPP
-#define KBE_CELLAPP_HPP
+#ifndef KBE_CELLAPP_H
+#define KBE_CELLAPP_H
 	
 // common include	
 #include "entity.h"
@@ -74,6 +74,9 @@ public:
 
 	virtual bool canShutdown();
 	virtual void onShutdown(bool first);
+
+	float _getLoad()const { return getLoad(); }
+	virtual void onUpdateLoad();
 
 	/**  网络接口
 		dbmgr告知已经启动的其他baseapp或者cellapp的地址
@@ -190,11 +193,6 @@ public:
 	static PyObject* __py_gametime(PyObject* self, PyObject* args);
 
 	/**
-		更新负载情况
-	*/
-	void updateLoad();
-
-	/**
 		添加与删除一个Updatable对象
 	*/
 	bool addUpdatable(Updatable* pObject);
@@ -242,6 +240,8 @@ public:
 	void pGhostManager(GhostManager* v){ pGhostManager_ = v; }
 	GhostManager* pGhostManager()const{ return pGhostManager_; }
 
+	ArraySize spaceSize()const { return (ArraySize)Spaces::size(); }
+
 protected:
 	GlobalDataClient*					pCellAppData_;									// cellAppData
 	ForwardComponent_MessageBuffer		forward_messagebuffer_;
@@ -260,4 +260,4 @@ protected:
 
 }
 
-#endif // KBE_CELLAPP_HPP
+#endif // KBE_CELLAPP_H

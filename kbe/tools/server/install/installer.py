@@ -28,48 +28,48 @@ else:
 	if platform.system() == 'Windows':
 		import _winreg as winreg
             
-# 源码及二进制发布网址
+# Sources and binary releases
 source_url = "https://github.com/kbengine/kbengine/releases/latest"
 bin_zip_url = "https://sourceforge.net/projects/kbengine/files/bin/latest.zip/download"
 bin_tgz_url = "https://sourceforge.net/projects/kbengine/files/bin/latest.tar.gz/download"
 bin_mysql_url = "https://sourceforge.net/projects/kbengine/files/bin/deps/mysql-win32.msi/download"
 
-# mysql 安装目录
+# MySQL installation directory
 mysql_root = ""
 mysql_home = ""
 
-# mysql版本信息
+# MySQL version information
 mysql_verinfo = ""
 
-# mysql 端口
+# MySQL port
 mysql_ip = ""
 mysql_port = ""
 
-# mysql root密码
+# MySQL root password
 mysql_root_password = ""
 
-# mysql kbe账号名称和密码
+# MySQL KBE account name and password
 mysql_kbe_name = ""
 mysql_kbe_password = ""
 
-# mysql db 名称
+# MySQL db name
 mysql_kbe_db_name = ""
 
-# mysql服务名称
+# MySQL service name
 mysql_sercive_name = ""
 
-# 根据root决定安装位置
+# According to root determine the installation position
 KBE_ROOT = ''
 KBE_RES_PATH = ''
 KBE_BIN_PATH = ''
 KBE_UID = ''
 kbe_res_path = ""
 
-# 系统用户名密码, 安装时临时使用
+# The system user name password, the temporary use of installation
 os_user_name = ""
 os_user_passwd = ""
 
-# 工具环境变量名
+# Tool environment variable name
 INSTALLER_EVN_NAME = 'KBT'
 
 _zip_kbengine_path = ""
@@ -128,7 +128,13 @@ def help():
 	OUT_MSG("--------------------------------------------------")
 
 def OUT_MSG(msg):
-	print(msg)
+    try:
+        print(msg)
+    except UnicodeEncodeError:
+        if sys.hexversion >= 0x03000000:
+            print(msg.encode('utf8').decode(sys.stdout.encoding))
+        else:
+            print(msg.encode('utf8'))
     
 def INFO_MSG(msg):
 	print(msg)
@@ -207,8 +213,8 @@ def resetKBEEnvironment():
 	KBE_BIN_PATH = getEnvironment('user', 'KBE_BIN_PATH')
 	KBE_UID = getEnvironment('user', 'UID')
 	
-	# 如果没有找到root环境配置， 则尝试从当前目录识别是否在kbengine目录中， 如果在
-	# 则我们自动设置环境
+	# if root environment configuration is not found, it checks if it is currently in the KBEngine directory, 
+	# if in the KBEngine directory, then we automatically set the environment
 	x_KBE_ROOT = KBE_ROOT
 	x_KBE_RES_PATH = KBE_RES_PATH
 	x_KBE_BIN_PATH = KBE_BIN_PATH
@@ -231,9 +237,9 @@ def resetKBEEnvironment():
 			x_KBE_ROOT.replace("\\", "/").replace("//", "/")
 		
 		if platform.system() == 'Windows':
-			x_KBE_RES_PATH = "%KBE_ROOT%/kbe/res/;%KBE_ROOT%/demo/;%KBE_ROOT%/demo/res/"
+			x_KBE_RES_PATH = "%KBE_ROOT%/kbe/res/;%KBE_ROOT%/assets/;%KBE_ROOT%/assets/scripts/;%KBE_ROOT%/assets/res/"
 		else:
-			x_KBE_RES_PATH = "$KBE_ROOT/kbe/res/:$KBE_ROOT/demo/:$KBE_ROOT/demo/res/"
+			x_KBE_RES_PATH = "$KBE_ROOT/kbe/res/:$KBE_ROOT/assets/:$KBE_ROOT/assets/scripts/:$KBE_ROOT/assets/res/"
 			
 	if platform.architecture()[0] == '32bit':
 		x_KBE_BIN_PATH = "%KBE_ROOT%/kbe/bin/server/"
@@ -280,7 +286,7 @@ def resetKBEEnvironment():
 		if platform.system() == 'Windows':
 			KBE_UID = getInput('reset KBE_UID(No input is [%s]):' % (x_KBE_UID)).strip()
 		else:
-			# Linux需要修改系统用户ID
+			# Linux needs to modify the system user ID
 			tmp = os_user_name
 			if len(tmp) == 0:
 				tmp = getpass.getuser()
@@ -442,9 +448,31 @@ def echoSystemEnvironment():
 	OUT_MSG("python_version=" + sys.version)
 	OUT_MSG("python_path=" + sys.executable)
 	OUT_MSG("currpath=" + os.getcwd())
+
+def findLocalKBEVersion():
+	global KBE_ROOT
+	
+	KBE_ROOT = getEnvironment('user', 'KBE_ROOT')
+	
+	fpath = "../../../../HISTORY.md"
+	if len(KBE_ROOT) > 0:
+		fpath = KBE_ROOT + "/HISTORY.md"
+	
+	try:
+		f = open(fpath)
+		for line in f.readlines():
+			if "#v" in line:
+				f.close()
+				return line.replace("#", "")
+
+		f.close()
+	except:
+		pass
+		
+	return "unknown"
 	
 def echoKBEVersion():
-	INFO_MSG("version=0.0.1")
+	INFO_MSG("version=" + findLocalKBEVersion())
 	
 	if getInput("View the latest version of GitHub? [yes|no]") != "yes":
 		return
@@ -779,7 +807,13 @@ def modifyKBEConfig():
 		
 	state = 0
 
-	f = open(kbengine_defs)
+	f = None
+	
+	try:
+		f = open(kbengine_defs, encoding='UTF-8')
+	except:
+		f = open(kbengine_defs)
+		
 	newxml = []
 	for x in f.readlines():
 		if "</dbmgr>" in x:
@@ -808,7 +842,13 @@ def modifyKBEConfig():
 		newxml.append(x)
 
 	f.close()
-	f = open(kbengine_defs, "w")
+	
+	try:
+		f = open(kbengine_defs, "w", encoding='UTF-8')
+	except:
+		f = open(kbengine_defs, "w")
+		
+	
 	f.writelines(newxml)
 	f.close()
 	return True
@@ -930,7 +970,7 @@ def createDatabase():
 			cmd = "\"" + mysql_home + ("mysql\" %s%s -hlocalhost -e" % (getRootOpt(mysql_root_password), rootusePortArgs)) + sql + " mysql"
 			syscommand(cmd, False)
                 
-		# 如果表存在则报错
+		# If the table exists, then an error
 		has_db_sql = "\"SELECT * FROM information_schema.SCHEMATA where SCHEMA_NAME=\'%s\'\""  % (mysql_kbe_db_name)
 		cmd = "\"" + mysql_home + ("mysql\" -u%s -p%s -hlocalhost -P%s -e" % (mysql_kbe_name, mysql_kbe_password, mysql_port)) + has_db_sql
 		ret, cret = syscommand(cmd, True)
@@ -942,12 +982,12 @@ def createDatabase():
 			mysql_kbe_name = ''
 			continue
 
-		# 创建表
+		# Create table
 		sql = "\"create database %s\"" % (mysql_kbe_db_name)
 		cmd = "\"" + mysql_home + ("mysql\" -u%s -p%s -hlocalhost -P%s -e" % (mysql_kbe_name, mysql_kbe_password, mysql_port)) + sql
 		syscommand(cmd, False)
 
-		# 再次检查是否创建成功， 成功返回值>0否则重新请求创建
+		# Once again, check whether the created successfully, return >0, otherwise a new request to create the
 		cmd = "\"" + mysql_home + ("mysql\" -u%s -p%s -hlocalhost -P%s -e" % (mysql_kbe_name, mysql_kbe_password, mysql_port)) + has_db_sql
 		ret, cret = syscommand(cmd, True)
 		if len(ret) == 0:
@@ -1098,16 +1138,22 @@ def get_sources_infos():
 	release_title = release_title[0][1]
 
 	# descriptions
-	tag_start = """<ul class="task-list">"""
-	tag_end = """</ul>"""
+	tag_start = """<div class="markdown-body">"""
+	tag_end = """</div>"""
 
 	descrs = html
 	descrs = descrs[descrs.find(tag_start) + len(tag_start):]
 	descrs = descrs[:descrs.find(tag_end)]
 	descrs = descrs.replace("\n", "")
+	descrs = descrs.replace("<p>", "\t- ")
+	descrs = descrs.replace("</p>", "\n")
+	
+	descrs = descrs.replace("<ul class=\"task-list\">", "")
 	descrs = descrs.replace("<li>", "\t- ")
 	descrs = descrs.replace("</li>", "\n")
-
+	descrs = descrs.replace("</ul>", "")
+	descrs.strip()
+	
 	# downloads
 	#print("\ndownloads:")
 	#print("found:" + src_zip_url)
@@ -1247,17 +1293,17 @@ def copy_new_to_kbengine_dir(checksources = True):
 	global _zip_kbengine_dirname
 	
 	currkbedir = _zip_kbengine_path + "/" + _zip_kbengine_dirname
-	
+
 	if len(_install_path) > 0:
 		KBE_ROOT = _install_path
 		if platform.system() == 'Windows':
-			KBE_RES_PATH = "%KBE_ROOT%kbe/res/;%KBE_ROOT%demo/;%KBE_ROOT%demo/res/"
+			KBE_RES_PATH = "%KBE_ROOT%kbe/res/;%KBE_ROOT%assets/;%KBE_ROOT%/assets/scripts/;%KBE_ROOT%assets/res/"
 			if platform.architecture()[0] == '32bit':
 				KBE_BIN_PATH = "%KBE_ROOT%kbe/bin/server/"
 			else:
 				KBE_BIN_PATH = "%KBE_ROOT%kbe/bin/server/"
 		else:
-			KBE_RES_PATH = "$KBE_ROOT/kbe/res/:$KBE_ROOT/demo/:$KBE_ROOT/demo/res/"
+			KBE_RES_PATH = "$KBE_ROOT/kbe/res/:$KBE_ROOT/assets/:$KBE_ROOT/assets/scripts/:$KBE_ROOT/assets/res/"
 			if platform.architecture()[0] == '32bit':
 				KBE_BIN_PATH = "$KBE_ROOT/kbe/bin/server/"
 			else:
@@ -1351,7 +1397,7 @@ def download_sources(release = True):
 
 	currurl = src_zip_url
 
-	# 如果release为False则下载git master版本
+	# If release is False, download the GIT version of master
 	if not release:
 		currurl = src_master_zip_url
 

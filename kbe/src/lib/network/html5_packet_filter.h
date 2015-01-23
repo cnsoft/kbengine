@@ -19,8 +19,8 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#ifndef KBE_HTML5_PACKET_FILTER_HPP
-#define KBE_HTML5_PACKET_FILTER_HPP
+#ifndef KBE_HTML5_PACKET_FILTER_H
+#define KBE_HTML5_PACKET_FILTER_H
 
 #include "network/packet_filter.h"
 
@@ -50,7 +50,7 @@ public:
 	HTML5PacketFilter(Channel* pChannel);
 	virtual ~HTML5PacketFilter();
 
-	virtual Reason send(NetworkInterface & networkInterface, Channel * pChannel, Packet * pPacket);
+	virtual Reason send(Channel * pChannel, PacketSender& sender, Packet * pPacket);
 
 	virtual Reason recv(Channel * pChannel, PacketReceiver & receiver, Packet * pPacket);
 
@@ -81,4 +81,4 @@ protected:
 }
 }
 
-#endif // KBE_HTML5_PACKET_FILTER_HPP
+#endif // KBE_HTML5_PACKET_FILTER_H

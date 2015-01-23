@@ -102,6 +102,38 @@ Base::~Base()
 void Base::onDefDataChanged(const PropertyDescription* propertyDescription, 
 		PyObject* pyData)
 {
+	if(initing_)
+		return;
+
+	uint32 flags = propertyDescription->getFlags();
+
+	if((flags & ED_FLAG_BASE_AND_CLIENT) <= 0 || clientMailbox_ == NULL)
+		return;
+
+	// 创建一个需要广播的模板流
+	MemoryStream* mstream = MemoryStream::ObjPool().createObject();
+
+	propertyDescription->getDataType()->addToStream(mstream, pyData);
+
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+	(*pBundle).newMessage(ClientInterface::onUpdatePropertys);
+	(*pBundle) << id();
+
+	if(scriptModule_->usePropertyDescrAlias())
+		(*pBundle) << propertyDescription->aliasIDAsUint8();
+	else
+		(*pBundle) << propertyDescription->getUType();
+
+	pBundle->append(*mstream);
+	
+	g_privateClientEventHistoryStats.trackEvent(scriptName(), 
+		propertyDescription->getName(), 
+		pBundle->currMsgLength());
+
+	// 按照当前的设计来说，有clientMailbox_必定是proxy
+	// 至于为何跑到base里来和python本身是C语言实现有关
+	static_cast<Proxy*>(this)->sendToClient(ClientInterface::onUpdatePropertys, pBundle);
+	MemoryStream::ObjPool().reclaimObject(mstream);
 }
 
 //-------------------------------------------------------------------------------------
@@ -129,10 +161,10 @@ void Base::eraseEntityLog()
 	// 需要判断dbid是否大于0， 如果大于0则应该要去擦除在线等记录情况.
 	if(this->dbid() > 0)
 	{
-		Network::Bundle::SmartPoolObjectPtr bundleptr = Network::Bundle::createSmartPoolObj();
-		(*bundleptr)->newMessage(DbmgrInterface::onEntityOffline);
-		(*(*bundleptr)) << this->dbid();
-		(*(*bundleptr)) << this->scriptModule()->getUType();
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+		(*pBundle).newMessage(DbmgrInterface::onEntityOffline);
+		(*pBundle) << this->dbid();
+		(*pBundle) << this->scriptModule()->getUType();
 
 		Components::COMPONENTS& cts = Components::getSingleton().getComponents(DBMGR_TYPE);
 		Components::ComponentInfos* dbmgrinfos = NULL;
@@ -143,10 +175,11 @@ void Base::eraseEntityLog()
 		if(dbmgrinfos == NULL || dbmgrinfos->pChannel == NULL || dbmgrinfos->cid == 0)
 		{
 			ERROR_MSG("Base::onDestroy: not found dbmgr!\n");
+			Network::Bundle::ObjPool().reclaimObject(pBundle);
 			return;
 		}
 
-		(*bundleptr)->send(Baseapp::getSingleton().networkInterface(), dbmgrinfos->pChannel);
+		dbmgrinfos->pChannel->send(pBundle);
 	}
 }
 
@@ -202,7 +235,7 @@ void Base::createCellData(void)
 	
 	ScriptDefModule::PROPERTYDESCRIPTION_MAP& propertyDescrs = scriptModule_->getCellPropertyDescriptions();
 	ScriptDefModule::PROPERTYDESCRIPTION_MAP::const_iterator iter = propertyDescrs.begin();
-	for(; iter != propertyDescrs.end(); iter++)
+	for(; iter != propertyDescrs.end(); ++iter)
 	{
 		PropertyDescription* propertyDescription = iter->second;
 		DataType* dataType = propertyDescription->getDataType();
@@ -250,7 +283,7 @@ void Base::addCellDataToStream(uint32 flags, MemoryStream* s, bool useAliasID)
 	ScriptDefModule::PROPERTYDESCRIPTION_MAP& propertyDescrs = scriptModule_->getCellPropertyDescriptions();
 	ScriptDefModule::PROPERTYDESCRIPTION_MAP::const_iterator iter = propertyDescrs.begin();
 
-	for(; iter != propertyDescrs.end(); iter++)
+	for(; iter != propertyDescrs.end(); ++iter)
 	{
 		PropertyDescription* propertyDescription = iter->second;
 		if(flags == 0 || (flags & propertyDescription->getFlags()) > 0)
@@ -307,7 +340,7 @@ void Base::addPersistentsDataToStream(uint32 flags, MemoryStream* s)
 		addPositionAndDirectionToStream(*s);
 	}
 
-	for(; iter != propertyDescrs.end(); iter++)
+	for(; iter != propertyDescrs.end(); ++iter)
 	{
 		PropertyDescription* propertyDescription = iter->second;
 		std::vector<ENTITY_PROPERTY_UID>::const_iterator finditer = 
@@ -376,7 +409,7 @@ PyObject* Base::createCellDataDict(uint32 flags)
 
 	ScriptDefModule::PROPERTYDESCRIPTION_MAP& propertyDescrs = scriptModule_->getCellPropertyDescriptions();
 	ScriptDefModule::PROPERTYDESCRIPTION_MAP::const_iterator iter = propertyDescrs.begin();
-	for(; iter != propertyDescrs.end(); iter++)
+	for(; iter != propertyDescrs.end(); ++iter)
 	{
 		PropertyDescription* propertyDescription = iter->second;
 		if((flags & propertyDescription->getFlags()) > 0)
@@ -408,8 +441,7 @@ void Base::sendToCellapp(Network::Bundle* pBundle)
 void Base::sendToCellapp(Network::Channel* pChannel, Network::Bundle* pBundle)
 {
 	KBE_ASSERT(pChannel != NULL && pBundle != NULL);
-	(*pBundle).send(Baseapp::getSingleton().networkInterface(), pChannel);
-	Network::Bundle::ObjPool().reclaimObject(pBundle);
+	pChannel->send(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
@@ -563,8 +595,7 @@ void Base::onDestroyEntity(bool deleteFromDB, bool writeToDB)
 		(*pBundle) << this->id();
 		(*pBundle) << this->dbid();
 		(*pBundle) << this->scriptModule()->getUType();
-		(*pBundle).send(Baseapp::getSingleton().networkInterface(), dbmgrinfos->pChannel);
-		Network::Bundle::ObjPool().reclaimObject(pBundle);
+		dbmgrinfos->pChannel->send(pBundle);
 
 		this->hasDB(false);
 		return;
@@ -1050,9 +1081,8 @@ void Base::onCellWriteToDBCompleted(CALLBACK_ID callbackID)
 
 	(*pBundle).append(*s);
 
-	(*pBundle).send(Baseapp::getSingleton().networkInterface(), dbmgrinfos->pChannel);
+	dbmgrinfos->pChannel->send(pBundle);
 	MemoryStream::ObjPool().reclaimObject(s);
-	Network::Bundle::ObjPool().reclaimObject(pBundle);
 }
 
 //-------------------------------------------------------------------------------------

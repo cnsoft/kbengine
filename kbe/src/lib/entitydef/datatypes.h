@@ -19,8 +19,8 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#ifndef KBE_DATA_TYPES_HPP
-#define KBE_DATA_TYPES_HPP
+#ifndef KBE_DATA_TYPES_H
+#define KBE_DATA_TYPES_H
 
 #include "common/common.h"
 #if KBE_PLATFORM == PLATFORM_WIN32
@@ -29,7 +29,7 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 #endif
 // common include	
 #include "datatype.h"
-#include "xmlplus/xmlplus.h"	
+#include "xml/xml.h"	
 #include "common/smartpointer.h"
 //#define NDEBUG
 // windows include	
@@ -73,4 +73,4 @@ protected:
 };
 
 }
-#endif // KBE_DATA_TYPES_HPP
+#endif // KBE_DATA_TYPES_H

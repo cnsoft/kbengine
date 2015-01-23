@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_SHUTDOWN_HANDLER_HPP
-#define KBE_SHUTDOWN_HANDLER_HPP
+#ifndef KBE_SHUTDOWN_HANDLER_H
+#define KBE_SHUTDOWN_HANDLER_H
 
 #include "common/common.h"
 #include "common/timer.h"
@@ -30,11 +30,12 @@ namespace KBEngine {
 class ShutdownHandler 
 {
 public:
-	enum SHUTDOWN_STATE{
-		SHUTDOWN_STATE_STOP = 0,
-		SHUTDOWN_STATE_BEGIN = 1,
-		SHUTDOWN_STATE_RUNNING = 2,
-		SHUTDOWN_STATE_END = 0
+	enum SHUTDOWN_STATE
+	{
+		SHUTDOWN_STATE_STOP = COMPONENT_STATE_RUN,
+		SHUTDOWN_STATE_BEGIN = COMPONENT_STATE_SHUTTINGDOWN_BEGIN,
+		SHUTDOWN_STATE_RUNNING = COMPONENT_STATE_SHUTTINGDOWN_RUNNING,
+		SHUTDOWN_STATE_END = COMPONENT_STATE_STOP
 	};
 
 	ShutdownHandler():lastShutdownFailReason_("tasks"),
@@ -60,4 +61,4 @@ protected:
 
 }
 
-#endif // KBE_SHUTDOWN_HANDLER_HPP
+#endif // KBE_SHUTDOWN_HANDLER_H

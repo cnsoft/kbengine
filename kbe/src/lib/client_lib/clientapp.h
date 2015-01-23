@@ -19,14 +19,14 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#ifndef KBE_CLIENT_APP_HPP
-#define KBE_CLIENT_APP_HPP
+#ifndef KBE_CLIENT_APP_H
+#define KBE_CLIENT_APP_H
 
 #include "clientobjectbase.h"
 #include "common/common.h"
 #include "helper/debug_helper.h"
 #include "helper/script_loglevel.h"
-#include "xmlplus/xmlplus.h"	
+#include "xml/xml.h"	
 #include "common/singleton.h"
 #include "common/smartpointer.h"
 #include "common/timer.h"
@@ -43,6 +43,7 @@ namespace KBEngine{
 namespace Network
 {
 class Channel;
+class TCPPacketSender;
 class TCPPacketReceiver;
 }
 
@@ -109,11 +110,14 @@ public:
 	bool login(std::string accountName, std::string passwd, 
 		std::string ip, KBEngine::uint32 port);
 
+	bool updateChannel(bool loginapp, std::string accountName, std::string passwd, 
+								   std::string ip, KBEngine::uint32 port);
+
 	GAME_TIME time() const { return g_kbetime; }
 	double gameTimeInSeconds() const;
 
-	Network::EventDispatcher & mainDispatcher()				{ return mainDispatcher_; }
-	Network::NetworkInterface & networkInterface()			{ return networkInterface_; }
+	Network::EventDispatcher & dispatcher()				{ return dispatcher_; }
+	Network::NetworkInterface & networkInterface()		{ return networkInterface_; }
 
 	COMPONENT_ID componentID()const	{ return componentID_; }
 	COMPONENT_TYPE componentType()const	{ return componentType_; }
@@ -225,9 +229,10 @@ protected:
 	// 本组件的ID
 	COMPONENT_ID											componentID_;									
 
-	Network::EventDispatcher& 								mainDispatcher_;
+	Network::EventDispatcher& 								dispatcher_;
 	Network::NetworkInterface&								networkInterface_;
 	
+	Network::TCPPacketSender*								pTCPPacketSender_;
 	Network::TCPPacketReceiver*								pTCPPacketReceiver_;
 	Network::BlowfishFilter*								pBlowfishFilter_;
 

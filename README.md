@@ -1,19 +1,20 @@
 KBEngine
 ========
 
+[![Build Status](https://travis-ci.org/kbengine/kbengine.svg)](https://travis-ci.org/kbengine/kbengine)
+
 ##Homepage
 http://www.kbengine.org
 
 ##Releases
-	sources		: https://github.com/kbengine/kbengine/releases 
+	sources		: https://github.com/kbengine/kbengine/releases/latest
 	binarys		: https://sourceforge.net/projects/kbengine/files/
 
 ##Demo sources
-	unity3d		: https://github.com/kbengine/kbengine_unity3d_demo/releases
-	unity3d		: https://github.com/kbengine/kbengine_unity3d_warring/releases
-	ogre		: https://github.com/kbengine/kbengine_ogre_demo/releases
-	html5		: https://github.com/kbengine/kbengine_html5_demo/releases
-
+	unity3d		: https://github.com/kbengine/kbengine_unity3d_demo/releases/latest
+	unity3d		: https://github.com/kbengine/kbengine_unity3d_warring/releases/latest
+	ogre		: https://github.com/kbengine/kbengine_ogre_demo/releases/latest
+	html5		: https://github.com/kbengine/kbengine_html5_demo/releases/latest
 
 ##Docs
 	docs		: http://www.kbengine.org/docs/
@@ -27,7 +28,7 @@ http://www.kbengine.org
 	16535321
 
 ##What is KBEngine?
-An open source MMOG server engine, Through a simple protocol, clients and server communications will be very simple.
+An open source MMOG server engine, the clients and server communications can through a simple protocol.
 To use the KBEngine-plugins quick combine with (Unity3D, OGRE, Cocos2d-x, HTML5, etc.) to form a complete client.
 
 Engine framework written using C++, game logic layer using Python(Support the hotfix), 
@@ -39,7 +40,7 @@ in theory only need to expand hardware can increase load-limit, the single machi
 depends on complexity of logic of the game itself.)
 
 ##什么是KBEngine?
-一款开源的游戏服务端引擎，使用简单的约定协议就能够使客户端与服务端进行交互，
+一款开源的游戏服务端引擎，客户端通过简单的约定协议就能与服务端通讯，
 使用KBEngine插件能够快速与(Unity3D, OGRE, Cocos2d-x, HTML5, 等等)技术结合形成一个完整的客户端。
 
 服务端底层框架使用C++编写，游戏逻辑层使用Python(支持热更新)，开发者无需重复的实现一些游戏服务端通用的底层技术，

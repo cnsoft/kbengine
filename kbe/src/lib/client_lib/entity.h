@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_CLIENTAPP_ENTITY_HPP
-#define KBE_CLIENTAPP_ENTITY_HPP
+#ifndef KBE_CLIENTAPP_ENTITY_H
+#define KBE_CLIENTAPP_ENTITY_H
 	
 // common include
 #include "entity_aspect.h"
@@ -136,7 +136,7 @@ public:
 	*/
 	void onUpdatePropertys(MemoryStream& s);
 
-	bool isEnterword()const{ return enterword_; }
+	bool inWorld()const{ return enterworld_; }
 
 	void onBecomePlayer();
 	void onBecomeNonPlayer();
@@ -156,7 +156,7 @@ protected:
 
 	float									velocity_;
 
-	bool									enterword_;							// 是否已经enterworld了， restore时有用
+	bool									enterworld_;						// 是否已经enterworld了， restore时有用
 	
 	bool									isOnGound_;
 };																										

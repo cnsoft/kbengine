@@ -19,8 +19,8 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#ifndef KBE_CELLAPPMGR_CELLAPP_HPP
-#define KBE_CELLAPPMGR_CELLAPP_HPP
+#ifndef KBE_CELLAPPMGR_CELLAPP_H
+#define KBE_CELLAPPMGR_CELLAPP_H
 
 #include "spaces.h"
 #include "common/common.h"
@@ -43,6 +43,13 @@ public:
 	
 	void destroy(){ isDestroyed_ = true; }
 	bool isDestroyed()const { return isDestroyed_; }
+
+	float initProgress()const{ return initProgress_; }
+	void initProgress(float v){ initProgress_ = v; }
+
+	ENTITY_ID numEntities()const { return numEntities_; }
+	void numEntities(ENTITY_ID num) { numEntities_ = num; }
+
 protected:
 	ENTITY_ID numEntities_;
 
@@ -53,8 +60,10 @@ protected:
 	Watchers watchers_;
 	
 	Spaces spaces_;
+
+	float initProgress_;
 };
 
 }
 
-#endif // KBE_CELLAPPMGR_CELLAPP_HPP
+#endif // KBE_CELLAPPMGR_CELLAPP_H

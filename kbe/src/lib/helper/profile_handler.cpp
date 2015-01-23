@@ -69,12 +69,12 @@ CProfileHandler::CProfileHandler(Network::NetworkInterface & networkInterface, u
 							   std::string name, const Network::Address& addr) :
 ProfileHandler(networkInterface, timinglen, name, addr)
 {
-	networkInterface_.dispatcher().addFrequentTask(this);
+	networkInterface_.dispatcher().addTask(this);
 
 	ProfileGroup& defaultGroup = ProfileGroup::defaultGroup();
 	ProfileGroup::PROFILEVALS::const_iterator iter = defaultGroup.profiles().begin();
 
-	for(; iter != defaultGroup.profiles().end(); iter++)
+	for(; iter != defaultGroup.profiles().end(); ++iter)
 	{
 		std::string name = (*iter)->name();
 	
@@ -95,7 +95,7 @@ ProfileHandler(networkInterface, timinglen, name, addr)
 //-------------------------------------------------------------------------------------
 CProfileHandler::~CProfileHandler()
 {
-	networkInterface_.dispatcher().cancelFrequentTask(this);
+	networkInterface_.dispatcher().cancelTask(this);
 }
 
 //-------------------------------------------------------------------------------------
@@ -109,7 +109,7 @@ void CProfileHandler::timeout()
 	s << size - 1;
 
 	CProfileHandler::PROFILEVALS::iterator iter = profileVals_.begin();
-	for(; iter != profileVals_.end(); iter++)
+	for(; iter != profileVals_.end(); ++iter)
 	{
 		if(iter->first == "RunningTime")
 		{
@@ -152,15 +152,15 @@ void CProfileHandler::sendStream(MemoryStream* s)
 		return;
 	}
 
-	Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 
 	ConsoleInterface::ConsoleProfileHandler msgHandler;
-	(*(*bundle)).newMessage(msgHandler);
+	(*pBundle).newMessage(msgHandler);
 
 	int8 type = 1;
-	(*(*bundle)) << type;
-	(*(*bundle)).append(s);
-	(*(*bundle)).send(networkInterface_, pChannel);
+	(*pBundle) << type;
+	(*pBundle).append(s);
+	pChannel->send(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
@@ -170,7 +170,7 @@ bool CProfileHandler::process()
 	ProfileGroup& defaultGroup = ProfileGroup::defaultGroup();
 	ProfileGroup::PROFILEVALS::const_iterator iter = defaultGroup.profiles().begin();
 
-	for(; iter != defaultGroup.profiles().end(); iter++)
+	for(; iter != defaultGroup.profiles().end(); ++iter)
 	{
 		std::string name = (*iter)->name();
 	
@@ -238,7 +238,7 @@ void EventProfileHandler::timeout()
 	s << size;
 
 	EventProfileHandler::PROFILEVALMAP::iterator iter = profileMaps_.begin();
-	for(; iter != profileMaps_.end(); iter++)
+	for(; iter != profileMaps_.end(); ++iter)
 	{
 		std::string type_name = iter->first;
 		PROFILEVALS& vals = iter->second;
@@ -249,7 +249,7 @@ void EventProfileHandler::timeout()
 		s << size;
 
 		EventProfileHandler::PROFILEVALS::iterator iter1 = vals.begin();
-		for(; iter1 != vals.end(); iter1++)
+		for(; iter1 != vals.end(); ++iter1)
 		{
 			ProfileVal& val = iter1->second;
 
@@ -273,15 +273,15 @@ void EventProfileHandler::sendStream(MemoryStream* s)
 		return;
 	}
 
-	Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 
 	ConsoleInterface::ConsoleProfileHandler msgHandler;
-	(*(*bundle)).newMessage(msgHandler);
+	(*pBundle).newMessage(msgHandler);
 
 	int8 type = 2;
-	(*(*bundle)) << type;
-	(*(*bundle)).append(s);
-	(*(*bundle)).send(networkInterface_, pChannel);
+	(*pBundle) << type;
+	(*pBundle).append(s);
+	pChannel->send(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
@@ -322,7 +322,7 @@ void EventProfileHandler::triggerEvent(const EventHistoryStats& eventHistory, co
 									  uint32 size)
 {
 	std::vector<EventProfileHandler*>::iterator iter = eventProfileHandlers_.begin();
-	for(; iter != eventProfileHandlers_.end(); iter++)
+	for(; iter != eventProfileHandlers_.end(); ++iter)
 	{
 		(*iter)->onTriggerEvent(eventHistory, stats, size);
 	}
@@ -354,7 +354,7 @@ void NetworkProfileHandler::timeout()
 	s << size;
 
 	NetworkProfileHandler::PROFILEVALS::iterator iter = profileVals_.begin();
-	for(; iter != profileVals_.end(); iter++)
+	for(; iter != profileVals_.end(); ++iter)
 	{
 		NetworkProfileHandler::ProfileVal& profileVal = iter->second;
 
@@ -381,15 +381,15 @@ void NetworkProfileHandler::sendStream(MemoryStream* s)
 		return;
 	}
 
-	Network::Bundle::SmartPoolObjectPtr bundle = Network::Bundle::createSmartPoolObj();
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 
 	ConsoleInterface::ConsoleProfileHandler msgHandler;
-	(*(*bundle)).newMessage(msgHandler);
+	(*pBundle).newMessage(msgHandler);
 
 	int8 type = 3;
-	(*(*bundle)) << type;
-	(*(*bundle)).append(s);
-	(*(*bundle)).send(networkInterface_, pChannel);
+	(*pBundle) << type;
+	(*pBundle).append(s);
+	pChannel->send(pBundle);
 }
 
 //-------------------------------------------------------------------------------------

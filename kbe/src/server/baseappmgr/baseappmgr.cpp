@@ -85,10 +85,9 @@ void Baseappmgr::handleTimeout(TimerHandle handle, void * arg)
 void Baseappmgr::handleGameTick()
 {
 	 //time_t t = ::time(NULL);
-	 //DEBUG_MSG("CellApp::handleGameTick[%"PRTime"]:%u\n", t, time_);
+	 //DEBUG_MSG("Baseappmgr::handleGameTick[%"PRTime"]:%u\n", t, time_);
 	
 	g_kbetime++;
-	updateBestBaseapp();
 	threadPool_.onMainThreadTick();
 	networkInterface().processAllChannelPackets(&BaseappmgrInterface::messageHandlers);
 }
@@ -102,6 +101,7 @@ void Baseappmgr::onChannelDeregister(Network::Channel * pChannel)
 		Components::ComponentInfos* cinfo = Components::getSingleton().findComponent(pChannel);
 		if(cinfo)
 		{
+			cinfo->state = COMPONENT_STATE_STOP;
 			std::map< COMPONENT_ID, Baseapp >::iterator iter = baseapps_.find(cinfo->cid);
 			if(iter != baseapps_.end())
 			{
@@ -124,12 +124,14 @@ void Baseappmgr::onAddComponent(const Components::ComponentInfos* pInfos)
 
 	if(pInfos->componentType == LOGINAPP_TYPE && cinfo->pChannel != NULL)
 	{
-		Network::Bundle::SmartPoolObjectPtr bundleptr = Network::Bundle::createSmartPoolObj();
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 
-		(*bundleptr)->newMessage(LoginappInterface::onBaseappInitProgress);
-		(*(*bundleptr)) << baseappsInitProgress_;
-		(*bundleptr)->send(networkInterface_, cinfo->pChannel);
+		(*pBundle).newMessage(LoginappInterface::onBaseappInitProgress);
+		(*pBundle) << baseappsInitProgress_;
+		cinfo->pChannel->send(pBundle);
 	}
+
+	ServerApp::onAddComponent(pInfos);
 }
 
 //-------------------------------------------------------------------------------------
@@ -147,7 +149,7 @@ bool Baseappmgr::inInitialize()
 //-------------------------------------------------------------------------------------
 bool Baseappmgr::initializeEnd()
 {
-	gameTimer_ = this->mainDispatcher().addTimer(1000000 / 50, this,
+	gameTimer_ = this->dispatcher().addTimer(1000000 / 50, this,
 							reinterpret_cast<void *>(TIMEOUT_GAME_TICK));
 	return true;
 }
@@ -178,9 +180,35 @@ void Baseappmgr::forwardMessage(Network::Channel* pChannel, MemoryStream& s)
 
 	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 	(*pBundle).append((char*)s.data() + s.rpos(), s.length());
-	(*pBundle).send(this->networkInterface(), cinfos->pChannel);
+	cinfos->pChannel->send(pBundle);
 	s.done();
-	Network::Bundle::ObjPool().reclaimObject(pBundle);
+}
+
+//-------------------------------------------------------------------------------------
+bool Baseappmgr::componentsReady()
+{
+	Components::COMPONENTS& cts = Components::getSingleton().getComponents(BASEAPP_TYPE);
+	Components::COMPONENTS::iterator ctiter = cts.begin();
+	for(; ctiter != cts.end(); ++ctiter)
+	{
+		if((*ctiter).pChannel == NULL)
+			return false;
+
+		if((*ctiter).state != COMPONENT_STATE_RUN)
+			return false;
+	}
+
+	return true;
+}
+
+//-------------------------------------------------------------------------------------
+bool Baseappmgr::componentReady(COMPONENT_ID cid)
+{
+	Components::ComponentInfos* cinfos = Components::getSingleton().findComponent(BASEAPP_TYPE, cid);
+	if(cinfos == NULL || cinfos->pChannel == NULL || cinfos->state != COMPONENT_STATE_RUN)
+		return false;
+
+	return true;
 }
 
 //-------------------------------------------------------------------------------------
@@ -192,6 +220,8 @@ void Baseappmgr::updateBaseapp(Network::Channel* pChannel, COMPONENT_ID componen
 	baseapp.load(load);
 	baseapp.numProxices(numProxices);
 	baseapp.numBases(numBases);
+
+	updateBestBaseapp();
 }
 
 //-------------------------------------------------------------------------------------
@@ -201,14 +231,19 @@ COMPONENT_ID Baseappmgr::findFreeBaseapp()
 	COMPONENT_ID cid = 0;
 
 	float minload = 1.f;
+	ENTITY_ID numEntities = 0x7fffffff;
 
-	for(; iter != baseapps_.end(); iter++)
+	for(; iter != baseapps_.end(); ++iter)
 	{
 		if(!iter->second.isDestroyed() &&
 			iter->second.initProgress() > 1.f && 
-			minload > iter->second.load())
+			(iter->second.numEntities() == 0 || 
+			minload > iter->second.load() || 
+			(minload == iter->second.load() && numEntities > iter->second.numEntities())))
 		{
 			cid = iter->first;
+
+			numEntities = iter->second.numEntities();
 			minload = iter->second.load();
 		}
 	}
@@ -226,9 +261,16 @@ void Baseappmgr::updateBestBaseapp()
 void Baseappmgr::reqCreateBaseAnywhere(Network::Channel* pChannel, MemoryStream& s) 
 {
 	Components::ComponentInfos* cinfos = 
-		Components::getSingleton().findComponent(BASEAPP_TYPE, bestBaseappID_);
+		Components::getSingleton().findComponent(pChannel);
 
-	if(cinfos == NULL || cinfos->pChannel == NULL)
+	// 此时肯定是在运行状态中，但有可能在等待创建space
+	// 所以初始化进度没有完成, 在只有一个baseapp的情况下如果这
+	// 里不进行设置将是一个相互等待的状态
+	if(cinfos)
+		cinfos->state = COMPONENT_STATE_RUN;
+
+	cinfos = Components::getSingleton().findComponent(BASEAPP_TYPE, bestBaseappID_);
+	if(cinfos == NULL || cinfos->pChannel == NULL || cinfos->state != COMPONENT_STATE_RUN)
 	{
 		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 		ForwardItem* pFI = new ForwardItem();
@@ -250,19 +292,24 @@ void Baseappmgr::reqCreateBaseAnywhere(Network::Channel* pChannel, MemoryStream&
 	(*pBundle).newMessage(BaseappInterface::onCreateBaseAnywhere);
 
 	(*pBundle).append((char*)s.data() + s.rpos(), s.length());
-	(*pBundle).send(this->networkInterface(), cinfos->pChannel);
+	cinfos->pChannel->send(pBundle);
 	s.done();
-
-	Network::Bundle::ObjPool().reclaimObject(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
 void Baseappmgr::reqCreateBaseAnywhereFromDBID(Network::Channel* pChannel, MemoryStream& s) 
 {
 	Components::ComponentInfos* cinfos = 
-		Components::getSingleton().findComponent(BASEAPP_TYPE, bestBaseappID_);
+		Components::getSingleton().findComponent(pChannel);
 
-	if(cinfos == NULL || cinfos->pChannel == NULL)
+	// 此时肯定是在运行状态中，但有可能在等待创建space
+	// 所以初始化进度没有完成, 在只有一个baseapp的情况下如果这
+	// 里不进行设置将是一个相互等待的状态
+	if(cinfos)
+		cinfos->state = COMPONENT_STATE_RUN;
+
+	cinfos = Components::getSingleton().findComponent(BASEAPP_TYPE, bestBaseappID_);
+	if(cinfos == NULL || cinfos->pChannel == NULL || cinfos->state != COMPONENT_STATE_RUN)
 	{
 		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 		ForwardItem* pFI = new ForwardItem();
@@ -284,10 +331,8 @@ void Baseappmgr::reqCreateBaseAnywhereFromDBID(Network::Channel* pChannel, Memor
 	(*pBundle).newMessage(BaseappInterface::createBaseAnywhereFromDBIDOtherBaseapp);
 
 	(*pBundle).append((char*)s.data() + s.rpos(), s.length());
-	(*pBundle).send(this->networkInterface(), cinfos->pChannel);
+	cinfos->pChannel->send(pBundle);
 	s.done();
-
-	Network::Bundle::ObjPool().reclaimObject(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
@@ -306,10 +351,9 @@ void Baseappmgr::registerPendingAccountToBaseapp(Network::Channel* pChannel,
 	pending_logins_[loginName] = cinfos->cid;
 
 	ENTITY_ID eid = 0;
-	cinfos = 
-		Components::getSingleton().findComponent(BASEAPP_TYPE, bestBaseappID_);
+	cinfos = Components::getSingleton().findComponent(BASEAPP_TYPE, bestBaseappID_);
 
-	if(cinfos == NULL || cinfos->pChannel == NULL)
+	if(cinfos == NULL || cinfos->pChannel == NULL || cinfos->state != COMPONENT_STATE_RUN)
 	{
 		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 		ForwardItem* pFI = new ForwardItem();
@@ -331,8 +375,7 @@ void Baseappmgr::registerPendingAccountToBaseapp(Network::Channel* pChannel,
 	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 	(*pBundle).newMessage(BaseappInterface::registerPendingLogin);
 	(*pBundle) << loginName << accountName << password << eid << entityDBID << flags << deadline << componentType;
-	(*pBundle).send(this->networkInterface(), cinfos->pChannel);
-	Network::Bundle::ObjPool().reclaimObject(pBundle);
+	cinfos->pChannel->send(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
@@ -364,8 +407,7 @@ void Baseappmgr::registerPendingAccountToBaseappAddr(Network::Channel* pChannel,
 	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 	(*pBundle).newMessage(BaseappInterface::registerPendingLogin);
 	(*pBundle) << loginName << accountName << password << entityID << entityDBID << flags << deadline << componentType;
-	(*pBundle).send(this->networkInterface(), cinfos->pChannel);
-	Network::Bundle::ObjPool().reclaimObject(pBundle);
+	cinfos->pChannel->send(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
@@ -399,9 +441,7 @@ void Baseappmgr::sendAllocatedBaseappAddr(Network::Channel* pChannel,
 	LoginappInterface::onLoginAccountQueryBaseappAddrFromBaseappmgrArgs4::staticAddToBundle((*pBundleToLoginapp), loginName, 
 		accountName, addr, port);
 
-	(*pBundleToLoginapp).send(this->networkInterface(), cinfos->pChannel);
-	Network::Bundle::ObjPool().reclaimObject(pBundleToLoginapp);
-
+	cinfos->pChannel->send(pBundleToLoginapp);
 	pending_logins_.erase(iter);
 }
 
@@ -421,10 +461,16 @@ void Baseappmgr::onBaseappInitProgress(Network::Channel* pChannel, COMPONENT_ID 
 	size_t completedCount = 0;
 
 	std::map< COMPONENT_ID, Baseapp >::iterator iter1 = baseapps_.begin();
-	for(; iter1 != baseapps_.end(); iter1++)
+	for(; iter1 != baseapps_.end(); ++iter1)
 	{
 		if((*iter1).second.initProgress() > 1.f)
+		{
+			Components::ComponentInfos* cinfos = Components::getSingleton().findComponent(cid);
+			if(cinfos)
+				cinfos->state = COMPONENT_STATE_RUN;
+
 			completedCount++;
+		}
 	}
 
 	if(completedCount >= baseapps_.size())
@@ -440,16 +486,16 @@ void Baseappmgr::onBaseappInitProgress(Network::Channel* pChannel, COMPONENT_ID 
 	Components::COMPONENTS& cts = Components::getSingleton().getComponents(LOGINAPP_TYPE);
 
 	Components::COMPONENTS::iterator iter = cts.begin();
-	for(; iter != cts.end(); iter++)
+	for(; iter != cts.end(); ++iter)
 	{
 		if((*iter).pChannel == NULL)
 			continue;
 
-		Network::Bundle::SmartPoolObjectPtr bundleptr = Network::Bundle::createSmartPoolObj();
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 
-		(*bundleptr)->newMessage(LoginappInterface::onBaseappInitProgress);
-		(*(*bundleptr)) << baseappsInitProgress_;
-		(*bundleptr)->send(networkInterface_, (*iter).pChannel);
+		(*pBundle).newMessage(LoginappInterface::onBaseappInitProgress);
+		(*pBundle) << baseappsInitProgress_;
+		(*iter).pChannel->send(pBundle);
 	}
 }
 

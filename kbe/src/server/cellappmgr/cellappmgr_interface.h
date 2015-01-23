@@ -19,12 +19,12 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #if defined(DEFINE_IN_INTERFACE)
-	#undef KBE_CELLAPPMGR_INTERFACE_HPP
+	#undef KBE_CELLAPPMGR_INTERFACE_H
 #endif
 
 
-#ifndef KBE_CELLAPPMGR_INTERFACE_HPP
-#define KBE_CELLAPPMGR_INTERFACE_HPP
+#ifndef KBE_CELLAPPMGR_INTERFACE_H
+#define KBE_CELLAPPMGR_INTERFACE_H
 
 // common include	
 #if defined(CELLAPPMGR)
@@ -86,8 +86,9 @@ NETWORK_INTERFACE_DECLARE_BEGIN(CellappmgrInterface)
 	CELLAPPMGR_MESSAGE_DECLARE_STREAM(queryWatcher,				NETWORK_VARIABLE_MESSAGE)
 
 	// 更新cellapp信息。
-	CELLAPPMGR_MESSAGE_DECLARE_ARGS2(updateCellapp,				NETWORK_FIXED_MESSAGE,
+	CELLAPPMGR_MESSAGE_DECLARE_ARGS3(updateCellapp,				NETWORK_FIXED_MESSAGE,
 									COMPONENT_ID,				componentID,
+									ENTITY_ID,					numEntities,
 									float,						load)
 
 	// 开始profile
@@ -95,6 +96,11 @@ NETWORK_INTERFACE_DECLARE_BEGIN(CellappmgrInterface)
 
 	// 请求强制杀死当前app
 	CELLAPPMGR_MESSAGE_DECLARE_STREAM(reqKillServer,			NETWORK_VARIABLE_MESSAGE)
+
+	// cellapp同步自己的初始化信息
+	CELLAPPMGR_MESSAGE_DECLARE_ARGS2(onCellappInitProgress,		NETWORK_FIXED_MESSAGE,
+									COMPONENT_ID,				cid,
+									float,						progress)
 
 NETWORK_INTERFACE_DECLARE_END()
 

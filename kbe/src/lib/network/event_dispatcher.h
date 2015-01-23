@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_EVENT_DISPATCHER_HPP
-#define KBE_EVENT_DISPATCHER_HPP
+#ifndef KBE_EVENT_DISPATCHER_H
+#define KBE_EVENT_DISPATCHER_H
 
 #include <map>
 #include "common/tasks.h"
@@ -47,40 +47,31 @@ public:
 	EventDispatcher();
 	virtual ~EventDispatcher();
 	
-	void processContinuously();
 	int  processOnce(bool shouldIdle = false);
 	void processUntilBreak();
 
-	bool isBreakProcessing()const { return breakProcessing_ == EVENT_DISPATCHER_STATUS_BREAK_PROCESSING; }
-	bool isWaitBreakProcessing()const { return breakProcessing_ == EVENT_DISPATCHER_STATUS_WAITING_BREAK_PROCESSING; }
+	INLINE bool hasBreakProcessing()const;
+	INLINE bool waitingBreakProcessing()const;
 
 	void breakProcessing(bool breakState = true);
 	INLINE void setWaitBreakProcessing();
-	bool processingBroken()const;
 	
-	void addFrequentTask(Task * pTask);
-	bool cancelFrequentTask(Task * pTask);
+	void addTask(Task * pTask);
+	bool cancelTask(Task * pTask);
 	
 	INLINE double maxWait() const;
 	INLINE void maxWait(double seconds);
 
-	bool registerFileDescriptor(int fd, InputNotificationHandler * handler);
-	bool deregisterFileDescriptor(int fd);
-	bool registerWriteFileDescriptor(int fd, InputNotificationHandler * handler);
+	bool registerReadFileDescriptor(int fd, InputNotificationHandler * handler);
+	bool deregisterReadFileDescriptor(int fd);
+	bool registerWriteFileDescriptor(int fd, OutputNotificationHandler * handler);
 	bool deregisterWriteFileDescriptor(int fd);
 
 	INLINE TimerHandle addTimer(int64 microseconds,
 					TimerHandler * handler, void* arg = NULL);
-	INLINE TimerHandle addOnceOffTimer(int64 microseconds,
-					TimerHandler * handler, void * arg = NULL);
 
-	uint64 timerDeliveryTime(TimerHandle handle) const;
-	uint64 timerIntervalTime(TimerHandle handle) const;
-	uint64 & timerIntervalTime(TimerHandle handle);
-	
 	uint64 getSpareTime() const;
 	void clearSpareTime();
-	double proportionalSpareTime() const;
 
 	ErrorReporter & errorReporter()	{ return *pErrorReporter_; }
 
@@ -94,18 +85,12 @@ private:
 		void * arg,
 		bool recurrent);
 
-	void processFrequentTasks();
+	void processTasks();
 	void processTimers();
 	void processStats();
 	
 	double calculateWait() const;
 	
-	void attachTo(EventDispatcher & parentDispatcher);
-	void detachFrom(EventDispatcher & parentDispatcher);
-	
-	typedef std::vector<EventDispatcher *> ChildDispatchers;
-	ChildDispatchers childDispatchers_;
-
 protected:
 	int8 breakProcessing_;
 
@@ -118,7 +103,7 @@ protected:
 	TimeStamp		totSpareTime_;
 	TimeStamp		lastStatisticsGathered_;
 	
-	Tasks* pFrequentTasks_;
+	Tasks* pTasks_;
 	ErrorReporter * pErrorReporter_;
 	Timers64* pTimers_;
 	EventPoller* pPoller_;
@@ -131,4 +116,4 @@ protected:
 #ifdef CODE_INLINE
 #include "event_dispatcher.inl"
 #endif
-#endif // KBE_EVENT_DISPATCHER_HPP
+#endif // KBE_EVENT_DISPATCHER_H

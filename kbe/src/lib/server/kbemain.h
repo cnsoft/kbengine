@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_KBEMAIN_HPP
-#define KBE_KBEMAIN_HPP
+#ifndef KBE_KBEMAIN_H
+#define KBE_KBEMAIN_H
 
 #include "helper/memory_helper.h"
 
@@ -85,7 +85,7 @@ inline void loadConfig()
 	// "../../res/server/kbengine_defs.xml"
 	g_kbeSrvConfig.loadConfig("server/kbengine_defs.xml");
 
-	// "../../../demo/res/server/kbengine.xml"
+	// "../../../assets/res/server/kbengine.xml"
 	g_kbeSrvConfig.loadConfig("server/kbengine.xml");
 }
 
@@ -112,15 +112,9 @@ inline void setEvns()
 		scomponentID = KBEngine::StringConv::val2str(v);
 	}
 
-#if KBE_PLATFORM == PLATFORM_WIN32
-		_putenv((std::string("KBE_COMPONENTID=") + scomponentID).c_str());
-		_putenv((std::string("KBE_GLOBALID=") + scomponentGlobalOrder).c_str());
-		_putenv((std::string("KBE_GROUPID=") + scomponentGroupOrder).c_str());
-#else
-		setenv("KBE_COMPONENTID", scomponentID.c_str(), 1);
-		setenv("KBE_GLOBALID", scomponentGlobalOrder.c_str(), 1);
-		setenv("KBE_GROUPID", scomponentGroupOrder.c_str(), 1);
-#endif
+	setenv("KBE_COMPONENTID", scomponentID.c_str(), 1);
+	setenv("KBE_GLOBALID", scomponentGlobalOrder.c_str(), 1);
+	setenv("KBE_GROUPID", scomponentGroupOrder.c_str(), 1);
 }
 
 template <class SERVER_APP>
@@ -178,16 +172,9 @@ int kbeMainT(int argc, char * argv[], COMPONENT_TYPE componentType,
 	}
 	
 	INFO_MSG(fmt::format("---- {} is running ----\n", COMPONENT_NAME_EX(componentType)));
+
 #if KBE_PLATFORM == PLATFORM_WIN32
 	printf("[INFO]: %s", (fmt::format("---- {} is running ----\n", COMPONENT_NAME_EX(componentType))).c_str());
-
-	wchar_t exe_path[MAX_PATH];
-	memset(exe_path, 0, MAX_PATH * sizeof(wchar_t));
-	GetCurrentDirectory(MAX_PATH, exe_path);
-	
-	char* ccattr = strutil::wchar2char(exe_path);
-	printf("Writing to: %s/logs/%s.*.log\n\n", ccattr, COMPONENT_NAME_EX(componentType));
-	free(ccattr);
 #endif
 
 	int ret = app.run();
@@ -205,7 +192,7 @@ inline void parseMainCommandArgs(int argc, char* argv[])
 		return;
 	}
 
-	for(int argIdx=1; argIdx<argc; argIdx++)
+	for(int argIdx=1; argIdx<argc; ++argIdx)
 	{
 		std::string cmd = argv[argIdx];
 		
@@ -309,4 +296,4 @@ int kbeMain
 #endif
 }
 
-#endif // KBE_KBEMAIN_HPP
+#endif // KBE_KBEMAIN_H

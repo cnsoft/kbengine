@@ -19,15 +19,12 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#ifndef KBE_MEMORY_HELPER_HPP
-#define KBE_MEMORY_HELPER_HPP
+#ifndef KBE_MEMORY_HELPER_H
+#define KBE_MEMORY_HELPER_H
 
 #include "common/common.h"
+#include "common/kbemalloc.h"
 #include "helper/debug_helper.h"
-
-#ifdef USE_JEMALLOC
-#include "jemalloc/jemalloc.h"
-#endif
 
 #if KBE_PLATFORM == PLATFORM_WIN32
 #ifdef _DEBUG
@@ -59,4 +56,4 @@ namespace KBEngine{
 
 }
 
-#endif // KBE_MEMORY_HELPER_HPP
+#endif // KBE_MEMORY_HELPER_H

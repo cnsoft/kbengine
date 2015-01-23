@@ -53,9 +53,17 @@ aliasID_(-1)
 MethodDescription::~MethodDescription()
 {
 	std::vector<DataType*>::iterator iter = argTypes_.begin();
-	for(; iter != argTypes_.end(); iter++)
+	for(; iter != argTypes_.end(); ++iter)
 		(*iter)->decRef();
+
 	argTypes_.clear();
+}
+
+//-------------------------------------------------------------------------------------
+void MethodDescription::setExposed(void)
+{ 
+	isExposed_ = true; 
+	EntityDef::md5().append((void*)&isExposed_, sizeof(bool));
 }
 
 //-------------------------------------------------------------------------------------
@@ -72,6 +80,7 @@ bool MethodDescription::pushArgType(DataType* dataType)
 
 	DATATYPE_UID uid = dataType->id();
 	EntityDef::md5().append((void*)&uid, sizeof(DATATYPE_UID));
+	EntityDef::md5().append((void*)&isExposed_, sizeof(bool));
 	return true;
 }
 
@@ -127,7 +136,7 @@ bool MethodDescription::checkArgs(PyObject* args)
 		}
 	}	
 	
-	for(uint8 i=0; i <argsSize; i++)
+	for(uint8 i=0; i <argsSize; ++i)
 	{
 		PyObject* pyArg = PyTuple_GetItem(args, i + offset);
 		if (!argTypes_[i]->isSameType(pyArg))
@@ -176,7 +185,7 @@ void MethodDescription::addToStream(MemoryStream* mstream, PyObject* args)
 	}
 
 	// 将每一个参数添加到流中
-	for(uint8 i=0; i <argsSize; i++)
+	for(uint8 i=0; i <argsSize; ++i)
 	{
 		PyObject* pyArg = PyTuple_GetItem(args, i + offset);
 		argTypes_[i]->addToStream(mstream, pyArg);
@@ -202,7 +211,7 @@ PyObject* MethodDescription::createFromStream(MemoryStream* mstream)
 	else
 		pyArgsTuple = PyTuple_New(argSize);
 
-	for(size_t index=0; index<argSize; index++)
+	for(size_t index=0; index<argSize; ++index)
 	{
 		PyObject* pyitem = argTypes_[index]->createFromStream(mstream);
 

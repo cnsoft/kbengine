@@ -107,6 +107,11 @@ void ClientObjectBase::finalise(void)
 
 	if(pEntities_)
 	{
+		client::Entity* entity = pPlayer();
+
+		if(entity && entity->inWorld())
+			entity->onBecomeNonPlayer();
+
 		pEntities_->finalise();
 		S_RELEASE(pEntities_);
 	}
@@ -133,12 +138,12 @@ void ClientObjectBase::reset(void)
 	connectedGateway_ = false;
 	name_ = "";
 	password_ = "";
-	extradatas_ = "";
+	extradatas_ = "unknown";
 	bufferedCreateEntityMessage_.clear();
 	canReset_ = false;
 	locktime_ = 0;
 
-	if(pServerChannel_)
+	if(pServerChannel_ && !pServerChannel_->isDestroyed())
 	{
 		pServerChannel_->destroy();
 		pServerChannel_->decRef();
@@ -166,7 +171,7 @@ void ClientObjectBase::tickSend()
 {
 	handleTimers();
 
-	if(!pServerChannel_ || !pServerChannel_->endpoint())
+	if(!pServerChannel_ || !pServerChannel_->pEndPoint())
 		return;
 	
 	if(pServerChannel_ && pServerChannel_->isDestroyed())
@@ -191,7 +196,7 @@ void ClientObjectBase::tickSend()
 		else
 			(*pBundle).newMessage(LoginappInterface::onClientActiveTick);
 
-		pServerChannel_->pushBundle(pBundle);
+		pServerChannel_->send(pBundle);
 	}
 
 	updatePlayerToServer();
@@ -227,13 +232,7 @@ void ClientObjectBase::onKicked(Network::Channel * pChannel, SERVER_ERROR_CODE f
 	eventdata.failedcode = failedcode;
 	eventHandler_.fire(&eventdata);
 
-#ifdef unix
-	::close(*pChannel->endpoint());
-#elif defined(PLAYSTATION3)
-	::socketclose(*pChannel->endpoint());
-#else
-	::closesocket(*pChannel->endpoint());
-#endif
+	onServerClosed();
 }
 
 //-------------------------------------------------------------------------------------
@@ -433,7 +432,7 @@ bool ClientObjectBase::createAccount()
 	(*pBundle) << name_;
 	(*pBundle) << password_;
 
-	pServerChannel_->pushBundle(pBundle);
+	pServerChannel_->send(pBundle);
 	return true;
 }
 
@@ -464,7 +463,7 @@ Network::Channel* ClientObjectBase::initLoginappChannel(std::string accountName,
 	Network::Address addr(ip.c_str(), port);
 	pEndpoint->addr(addr);
 
-	pServerChannel_->endpoint(pEndpoint);
+	pServerChannel_->pEndPoint(pEndpoint);
 	pEndpoint->setnonblocking(true);
 	pEndpoint->setnodelay(true);
 
@@ -501,7 +500,7 @@ Network::Channel* ClientObjectBase::initBaseappChannel()
 	Network::Address addr(ip_.c_str(), port_);
 	pEndpoint->addr(addr);
 
-	pServerChannel_->endpoint(pEndpoint);
+	pServerChannel_->pEndPoint(pEndpoint);
 	pEndpoint->setnonblocking(true);
 	pEndpoint->setnodelay(true);
 
@@ -589,7 +588,7 @@ bool ClientObjectBase::login()
 	(*pBundle) << name_;
 	(*pBundle) << password_;
 	(*pBundle) << EntityDef::md5().getDigestStr();
-	pServerChannel_->pushBundle(pBundle);
+	pServerChannel_->send(pBundle);
 	connectedGateway_ = false;
 	return true;
 }
@@ -604,7 +603,7 @@ bool ClientObjectBase::loginGateWay()
 	(*pBundle).newMessage(BaseappInterface::loginGateway);
 	(*pBundle) << name_;
 	(*pBundle) << password_;
-	pServerChannel_->pushBundle(pBundle);
+	pServerChannel_->send(pBundle);
 	return true;
 }
 
@@ -620,7 +619,7 @@ bool ClientObjectBase::reLoginGateWay()
 	(*pBundle) << password_;
 	(*pBundle) << rndUUID();
 	(*pBundle) << entityID_;
-	pServerChannel_->pushBundle(pBundle);
+	pServerChannel_->send(pBundle);
 	return true;
 }
 
@@ -791,12 +790,12 @@ void ClientObjectBase::onEntityEnterWorld(Network::Channel * pChannel, MemoryStr
 			bufferedCreateEntityMessage_.erase(iter);
 			entity->isOnGound(isOnGound > 0);
 
-			DEBUG_MSG(fmt::format("ClientObjectBase::onEntityEnterWorld: {}({}), isOnGound({}).\n", 
-				entity->scriptName(), eid, (int)isOnGound));
+			DEBUG_MSG(fmt::format("ClientObjectBase::onEntityEnterWorld: {}({}), isOnGound({}), appID({}).\n", 
+				entity->scriptName(), eid, (int)isOnGound, appID()));
 		}
 		else
 		{
-			ERROR_MSG(fmt::format("ClientObjectBase::onEntityEnterWorld: not found entity({}).\n", eid));
+			ERROR_MSG(fmt::format("ClientObjectBase::onEntityEnterWorld: not found entity({}), appID({}).\n", eid, appID()));
 			return;
 		}
 	}
@@ -809,10 +808,10 @@ void ClientObjectBase::onEntityEnterWorld(Network::Channel * pChannel, MemoryStr
 		// 初始化一下服务端当前的位置
 		entity->serverPosition(entity->position());
 
-		DEBUG_MSG(fmt::format("ClientObjectBase::onEntityEnterWorld: {}({}), isOnGound({}).\n",
-			entity->scriptName(), eid, (int)isOnGound));
+		DEBUG_MSG(fmt::format("ClientObjectBase::onEntityEnterWorld: {}({}), isOnGound({}), appID({}).\n",
+			entity->scriptName(), eid, (int)isOnGound, appID()));
 
-		KBE_ASSERT(!entity->isEnterword());
+		KBE_ASSERT(!entity->inWorld());
 		KBE_ASSERT(entity->cellMailbox() == NULL);
 
 		// 设置entity的cellMailbox
@@ -864,16 +863,19 @@ void ClientObjectBase::onEntityLeaveWorld(Network::Channel * pChannel, ENTITY_ID
 	client::Entity* entity = pEntities_->find(eid);
 	if(entity == NULL)
 	{	
-		ERROR_MSG(fmt::format("ClientObjectBase::onEntityLeaveWorld: not found entity({}).\n", eid));
+		ERROR_MSG(fmt::format("ClientObjectBase::onEntityLeaveWorld: not found entity({}), appID({}).\n", eid, appID()));
 		return;
 	}
 
-	DEBUG_MSG(fmt::format("ClientObjectBase::onEntityLeaveWorld: {}({}).\n", 
-		entity->scriptName(), eid));
+	DEBUG_MSG(fmt::format("ClientObjectBase::onEntityLeaveWorld: {}({}), appID({}).\n", 
+		entity->scriptName(), eid, appID()));
 
 	EventData_LeaveWorld eventdata;
 	eventdata.spaceID = entity->spaceID();
 	eventdata.entityID = entity->id();
+
+	if(entityID_ == eid)
+		entity->onBecomeNonPlayer();
 
 	entity->onLeaveWorld();
 
@@ -1113,7 +1115,7 @@ void ClientObjectBase::updatePlayerToServer()
 
 	(*pBundle) << pEntity->isOnGound();
 	(*pBundle) << spaceID_;
-	pServerChannel_->pushBundle(pBundle);
+	pServerChannel_->send(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
@@ -1724,7 +1726,7 @@ void ClientObjectBase::clearSpace(bool isAll)
 	if(!isAll)
 	{
 		Entities<client::Entity>::ENTITYS_MAP::iterator iter = pEntities_->getEntities().begin();
-		for(; iter != pEntities_->getEntities().end(); iter++)
+		for(; iter != pEntities_->getEntities().end(); ++iter)
 		{
 			client::Entity* pEntity = static_cast<client::Entity*>(iter->second.get());
 			if(pEntity->id() == this->entityID())
@@ -1749,7 +1751,7 @@ void ClientObjectBase::clearSpace(bool isAll)
 	else
 	{
 		Entities<client::Entity>::ENTITYS_MAP::iterator iter = pEntities_->getEntities().begin();
-		for(; iter != pEntities_->getEntities().end(); iter++)
+		for(; iter != pEntities_->getEntities().end(); ++iter)
 		{
 			client::Entity* pEntity = static_cast<client::Entity*>(iter->second.get());
 
@@ -2072,7 +2074,7 @@ PyObject* ClientObjectBase::__py_getWatcherDir(PyObject* self, PyObject* args)
 	PyObject* pyTuple = PyTuple_New(vec.size());
 	std::vector<std::string>::iterator iter = vec.begin();
 	int i = 0;
-	for(; iter != vec.end(); iter++)
+	for(; iter != vec.end(); ++iter)
 	{
 		PyTuple_SET_ITEM(pyTuple, i++, PyUnicode_FromString((*iter).c_str()));
 	}

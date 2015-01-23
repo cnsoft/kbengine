@@ -84,7 +84,7 @@ void Resmgr::autoSetPaths()
 
 	s = s.substr(0, pos1 + 1);
 	kb_env_.root = s;
-	kb_env_.res_path = kb_env_.root + "kbe/res/;" + kb_env_.root + "/demo/;" + kb_env_.root + "/demo/scripts/;" + kb_env_.root + "/demo/res/";
+	kb_env_.res_path = kb_env_.root + "kbe/res/;" + kb_env_.root + "/assets/;" + kb_env_.root + "/assets/scripts/;" + kb_env_.root + "/assets/res/";
 }
 
 //-------------------------------------------------------------------------------------
@@ -129,7 +129,7 @@ void Resmgr::updatePaths()
 
 	kb_env_.res_path = "";
 	std::vector<std::string>::iterator iter = respaths_.begin();
-	for(; iter != respaths_.end(); iter++)
+	for(; iter != respaths_.end(); ++iter)
 	{
 		if((*iter).size() <= 0)
 			continue;
@@ -160,7 +160,7 @@ bool Resmgr::initialize()
 	kb_env_.bin_path		= getenv("KBE_BIN_PATH") == NULL ? "" : getenv("KBE_BIN_PATH"); 
 
 	//kb_env_.root			= "/home/kbengine/";
-	//kb_env_.res_path		= "/home/kbengine/kbe/res/;/home/kbengine/demo/;/home/kbengine/demo/scripts/;/home/kbengine/demo/res/"; 
+	//kb_env_.res_path		= "/home/kbengine/kbe/res/;/home/kbengine/assets/;/home/kbengine/assets/scripts/;/home/kbengine/assets/res/"; 
 	//kb_env_.bin_path		= "/home/kbengine/kbe/bin/server/"; 
 	updatePaths();
 
@@ -188,6 +188,13 @@ void Resmgr::print(void)
 	INFO_MSG(fmt::format("Resmgr::initialize: KBE_ROOT={0}\n", kb_env_.root));
 	INFO_MSG(fmt::format("Resmgr::initialize: KBE_RES_PATH={0}\n", kb_env_.res_path));
 	INFO_MSG(fmt::format("Resmgr::initialize: KBE_BIN_PATH={0}\n", kb_env_.bin_path));
+
+#if KBE_PLATFORM == PLATFORM_WIN32
+	printf("%s", fmt::format("KBE_ROOT = {0}\n", kb_env_.root).c_str());
+	printf("%s", fmt::format("KBE_RES_PATH = {0}\n", kb_env_.res_path).c_str());
+	printf("%s", fmt::format("KBE_BIN_PATH = {0}\n", kb_env_.bin_path).c_str());
+	printf("\n");
+#endif
 }
 
 //-------------------------------------------------------------------------------------
@@ -201,7 +208,7 @@ std::string Resmgr::matchRes(const char* res)
 {
 	std::vector<std::string>::iterator iter = respaths_.begin();
 
-	for(; iter != respaths_.end(); iter++)
+	for(; iter != respaths_.end(); ++iter)
 	{
 		std::string fpath = ((*iter) + res);
 
@@ -224,7 +231,7 @@ bool Resmgr::hasRes(const std::string& res)
 {
 	std::vector<std::string>::iterator iter = respaths_.begin();
 
-	for(; iter != respaths_.end(); iter++)
+	for(; iter != respaths_.end(); ++iter)
 	{
 		std::string fpath = ((*iter) + res);
 
@@ -247,7 +254,7 @@ FILE* Resmgr::openRes(std::string res, const char* mode)
 {
 	std::vector<std::string>::iterator iter = respaths_.begin();
 
-	for(; iter != respaths_.end(); iter++)
+	for(; iter != respaths_.end(); ++iter)
 	{
 		std::string fpath = ((*iter) + res);
 
@@ -326,7 +333,7 @@ bool Resmgr::listPathRes(std::wstring path, const std::wstring& extendName, std:
 					std::vector<std::wstring> vec;
 					strutil::kbe_split<wchar_t>(wstr, L'.', vec);
 
-					for(size_t ext = 0; ext < extendNames.size(); ext++)
+					for(size_t ext = 0; ext < extendNames.size(); ++ext)
 					{
 						if(extendNames[ext].size() > 0 && vec.size() > 1 && vec[vec.size() - 1] == extendNames[ext])
 						{
@@ -386,7 +393,7 @@ bool Resmgr::listPathRes(std::wstring path, const std::wstring& extendName, std:
 					std::vector<std::wstring> vec;
 					strutil::kbe_split<wchar_t>(FindFileData.cFileName, L'.', vec);
 
-					for(size_t ext = 0; ext < extendNames.size(); ext++)
+					for(size_t ext = 0; ext < extendNames.size(); ++ext)
 					{
 						if(extendNames[ext].size() > 0 && vec.size() > 1 && vec[vec.size() - 1] == extendNames[ext])
 						{
@@ -427,7 +434,7 @@ std::string Resmgr::matchPath(const char* path)
 	strutil::kbe_replace(npath, "\\", "/");
 	strutil::kbe_replace(npath, "//", "/");
 
-	for(; iter != respaths_.end(); iter++)
+	for(; iter != respaths_.end(); ++iter)
 	{
 		std::string fpath = ((*iter) + npath);
 

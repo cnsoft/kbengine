@@ -19,8 +19,8 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#ifndef KBE_BOTS_HPP
-#define KBE_BOTS_HPP
+#ifndef KBE_BOTS_H
+#define KBE_BOTS_H
 	
 // common include	
 #include "profile.h"
@@ -30,7 +30,7 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 #include "network/endpoint.h"
 #include "helper/debug_helper.h"
 #include "helper/script_loglevel.h"
-#include "xmlplus/xmlplus.h"	
+#include "xml/xml.h"	
 #include "common/singleton.h"
 #include "common/smartpointer.h"
 #include "common/timer.h"
@@ -349,4 +349,4 @@ protected:
 
 }
 
-#endif // KBE_BOTS_HPP
+#endif // KBE_BOTS_H

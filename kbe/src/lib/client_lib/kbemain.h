@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBEMAIN_CLIENT_HPP
-#define KBEMAIN_CLIENT_HPP
+#ifndef KBEMAIN_CLIENT_H
+#define KBEMAIN_CLIENT_H
 #include "clientapp.h"
 #include "entity.h"
 #include "common/common.h"
@@ -140,7 +140,7 @@ inline bool loadConfig()
 		// "../../res/server/kbengine_defs.xml"
 		g_kbeSrvConfig.loadConfig("server/kbengine_defs.xml");
 
-		// "../../../demo/res/server/kbengine.xml"
+		// "../../../assets/res/server/kbengine.xml"
 		g_kbeSrvConfig.loadConfig("server/kbengine.xml");
 	}
 	else
@@ -158,7 +158,7 @@ inline void parseMainCommandArgs(int argc, char* argv[])
 		return;
 	}
 
-	for(int argIdx=1; argIdx<argc; argIdx++)
+	for(int argIdx=1; argIdx<argc; ++argIdx)
 	{
 		std::string cmd = argv[argIdx];
 		
@@ -253,15 +253,9 @@ inline void setEvns()
 		scomponentID = KBEngine::StringConv::val2str(v);
 	}
 
-#if KBE_PLATFORM == PLATFORM_WIN32
-		_putenv((std::string("KBE_COMPONENTID=") + scomponentID).c_str());
-		_putenv((std::string("KBE_GLOBALID=") + scomponentGlobalOrder).c_str());
-		_putenv((std::string("KBE_GROUPID=") + scomponentGroupOrder).c_str());
-#else
-		setenv("KBE_COMPONENTID", scomponentID.c_str(), 1);
-		setenv("KBE_GLOBALID", scomponentGlobalOrder.c_str(), 1);
-		setenv("KBE_GROUPID", scomponentGroupOrder.c_str(), 1);
-#endif
+	setenv("KBE_COMPONENTID", scomponentID.c_str(), 1);
+	setenv("KBE_GLOBALID", scomponentGlobalOrder.c_str(), 1);
+	setenv("KBE_GROUPID", scomponentGroupOrder.c_str(), 1);
 }
 
 template <class CLIENT_APP>
@@ -326,4 +320,4 @@ int kbeMain
 
 }
 
-#endif // KBEMAIN_CLIENT_HPP
+#endif // KBEMAIN_CLIENT_H

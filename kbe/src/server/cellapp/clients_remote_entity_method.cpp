@@ -131,8 +131,6 @@ PyObject* ClientsRemoteEntityMethod::callmethod(PyObject* args, PyObject* kwds)
 			//mailbox->postMail((*pBundle));
 			pEntity->pWitness()->sendToClient(ClientInterface::onRemoteMethodCall, pBundle);
 
-			//Network::Bundle::ObjPool().reclaimObject(pBundle);
-
 			// 记录这个事件产生的数据量大小
 			g_publicClientEventHistoryStats.trackEvent(pEntity->scriptName(), 
 				methodDescription->getName(), 
@@ -142,7 +140,7 @@ PyObject* ClientsRemoteEntityMethod::callmethod(PyObject* args, PyObject* kwds)
 		
 		// 广播给其他人
 		std::list<ENTITY_ID>::const_iterator iter = entities.begin();
-		for(; iter != entities.end(); iter++)
+		for(; iter != entities.end(); ++iter)
 		{
 			Entity* pAoiEntity = Cellapp::getSingleton().findEntity((*iter));
 			if(pAoiEntity == NULL || pAoiEntity->pWitness() == NULL || pAoiEntity->isDestroyed())
@@ -197,8 +195,6 @@ PyObject* ClientsRemoteEntityMethod::callmethod(PyObject* args, PyObject* kwds)
 
 			//mailbox->postMail((*pBundle));
 			pAoiEntity->pWitness()->sendToClient(ClientInterface::onRemoteMethodCallOptimized, pSendBundle);
-
-			//Network::Bundle::ObjPool().reclaimObject(pSendBundle);
 
 			// 记录这个事件产生的数据量大小
 			g_publicClientEventHistoryStats.trackEvent(pAoiEntity->scriptName(), 

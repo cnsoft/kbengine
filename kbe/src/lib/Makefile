@@ -24,7 +24,6 @@ all install clean full:
 	cd dependencies/g3dlite && $(MAKE) $@
 	cd dependencies/tinyxml && $(MAKE) $@
 	cd dependencies/sigar/linux && $(MAKE) $@
-	cd dependencies/jsoncpp/src/lib_json && $(MAKE) $@
 	cd dependencies/tmxparser && $(MAKE) $@
 	cd dependencies/jwsmtp/jwsmtp/jwsmtp && $(MAKE) $@
 	cd dependencies/jemalloc && $(MAKE) $@
@@ -46,5 +45,5 @@ all install clean full:
 	cd network && $(MAKE) $@
 	cd helper && $(MAKE) $@
 	cd thread && $(MAKE) $@
-	cd xmlplus && $(MAKE) $@
+	cd xml && $(MAKE) $@
 

@@ -55,7 +55,7 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 #endif
 #endif
 
-#include "../../server/tools/message_log/messagelog_interface.h"
+#include "../../server/tools/logger/logger_interface.h"
 
 namespace KBEngine{
 	
@@ -81,6 +81,25 @@ void myassert(const char * exp, const char * func, const char * file, unsigned i
 	dbghelper.print_msg(s);
     abort();
 }
+#endif
+
+#if KBE_PLATFORM == PLATFORM_WIN32
+	#define ALERT_LOG_TO(NAME, CHANGED)							\
+	{															\
+		wchar_t exe_path[MAX_PATH];								\
+		memset(exe_path, 0, MAX_PATH * sizeof(wchar_t));		\
+		GetCurrentDirectory(MAX_PATH, exe_path);				\
+																\
+		char* ccattr = strutil::wchar2char(exe_path);			\
+		if(CHANGED)												\
+			printf("Logging(changed) to: %s/logs/"NAME"%s.*.log\n\n", ccattr, COMPONENT_NAME_EX(g_componentType));\
+		else													\
+			printf("Logging to: %s/logs/"NAME"%s.*.log\n\n", ccattr, COMPONENT_NAME_EX(g_componentType));\
+		free(ccattr);											\
+	}															\
+
+#else
+#define ALERT_LOG_TO(NAME, CHANGED) {}
 #endif
 
 //-------------------------------------------------------------------------------------
@@ -163,7 +182,7 @@ _logfile(NULL),
 _currFile(),
 _currFuncName(),
 _currLine(0),
-messagelogAddr_(),
+loggerAddr_(),
 logMutex(),
 bufferedLogPackets_(),
 hasBufferedLogPackets_(0),
@@ -194,7 +213,7 @@ std::string DebugHelper::getLogName()
 #ifndef NO_USE_LOG4CXX
 	/*
 	log4cxx::FileAppenderPtr appender = (log4cxx::FileAppenderPtr)g_logger->getAppender(log4cxx::LogString(L"R"));
-	if(appender->getFile().size() == 0 || appender == NULL)
+	if(appender == NULL || appender->getFile().size() == 0)
 		return "";
 
 	char* ccattr = strutil::wchar2char(appender->getFile().c_str());
@@ -209,10 +228,10 @@ std::string DebugHelper::getLogName()
 }
 
 //-------------------------------------------------------------------------------------
-void DebugHelper::changeLogger(std::string name)
+void DebugHelper::changeLogger(const std::string& name)
 {
 #ifndef NO_USE_LOG4CXX
-	g_logger = log4cxx::Logger::getLogger(name.c_str());
+	g_logger = log4cxx::Logger::getLogger(name);
 #endif
 }
 
@@ -234,20 +253,21 @@ void DebugHelper::initialize(COMPONENT_TYPE componentType)
 #ifndef NO_USE_LOG4CXX
 	
 	char helpConfig[MAX_PATH];
-
 	if(componentType == CLIENT_TYPE || componentType == CONSOLE_TYPE)
 	{
-		g_logger = log4cxx::Logger::getLogger("default");
 		kbe_snprintf(helpConfig, MAX_PATH, "log4j.properties");
+		log4cxx::PropertyConfigurator::configure(Resmgr::getSingleton().matchRes(helpConfig).c_str());
 	}
 	else
 	{
-		g_logger = log4cxx::Logger::getLogger(COMPONENT_NAME_EX(componentType));
 		kbe_snprintf(helpConfig, MAX_PATH, "server/log4cxx_properties/%s.properties", COMPONENT_NAME_EX(componentType));
+		log4cxx::PropertyConfigurator::configure(Resmgr::getSingleton().matchRes(helpConfig).c_str());
 	}
 
-	log4cxx::PropertyConfigurator::configure(Resmgr::getSingleton().matchRes(helpConfig).c_str());
+	g_logger = log4cxx::Logger::getRootLogger();
 #endif
+
+	ALERT_LOG_TO("", false);
 }
 
 //-------------------------------------------------------------------------------------
@@ -285,6 +305,7 @@ void DebugHelper::clearBufferedLog(bool destroy)
 
 	hasBufferedLogPackets_ = 0;
 	noSyncLog_ = true;
+	canLogFile_ = true;
 
 	if(!destroy)
 		g_pDebugHelperSyncHandler->cancel();
@@ -301,27 +322,45 @@ void DebugHelper::sync()
 		return;
 	}
 
-	if(Network::Address::NONE == messagelogAddr_)
+	if(Network::Address::NONE == loggerAddr_)
 	{
-		if(hasBufferedLogPackets_ > g_kbeSrvConfig.tickMaxBufferedLogs())
+		if(g_kbeSrvConfig.tickMaxBufferedLogs() > 0)
 		{
-			clearBufferedLog();
+			if(hasBufferedLogPackets_ > g_kbeSrvConfig.tickMaxBufferedLogs())
+			{
+				clearBufferedLog();
+			}
 		}
-		
-		canLogFile_ = true;
+		else
+		{
+			if(hasBufferedLogPackets_ > 256)
+			{
+				clearBufferedLog();
+			}
+		}
+
 		unlockthread();
 		return;
 	}
 	
-	Network::Channel* pMessagelogChannel = pNetworkInterface_->findChannel(messagelogAddr_);
-	if(pMessagelogChannel == NULL)
+	Network::Channel* pLoggerChannel = pNetworkInterface_->findChannel(loggerAddr_);
+	if(pLoggerChannel == NULL)
 	{
-		if(hasBufferedLogPackets_ > g_kbeSrvConfig.tickMaxBufferedLogs())
+		if(g_kbeSrvConfig.tickMaxBufferedLogs() > 0)
 		{
-			clearBufferedLog();
+			if(hasBufferedLogPackets_ > g_kbeSrvConfig.tickMaxBufferedLogs())
+			{
+				clearBufferedLog();
+			}
+		}
+		else
+		{
+			if(hasBufferedLogPackets_ > 256)
+			{
+				clearBufferedLog();
+			}
 		}
 		
-		canLogFile_ = true;
 		unlockthread();
 		return;
 	}
@@ -329,8 +368,9 @@ void DebugHelper::sync()
 	static bool alertmsg = false;
 	if(!alertmsg)
 	{
-		LOG4CXX_WARN(g_logger, fmt::format("The message is forwarded to the messagelog[{}]...\n", 
-			pMessagelogChannel->c_str()));
+		LOG4CXX_WARN(g_logger, fmt::format("Forwarding logs to logger[{}]...\n", 
+			pLoggerChannel->c_str()));
+
 		alertmsg = true;
 	}
 
@@ -342,14 +382,15 @@ void DebugHelper::sync()
 
 	while(!bufferedLogPackets_.empty())
 	{
-		if(i++ >= g_kbeSrvConfig.tickMaxSyncLogs() || totalLen > (PACKET_MAX_SIZE_TCP * 10))
+		if((g_kbeSrvConfig.tickMaxSyncLogs() > 0 && i++ >= g_kbeSrvConfig.tickMaxSyncLogs()) || 
+			totalLen > (PACKET_MAX_SIZE_TCP * 10))
 			break;
 		
 		Network::Bundle* pBundle = bufferedLogPackets_.front();
 		bufferedLogPackets_.pop();
 
 		totalLen += pBundle->currMsgLength();
-		pMessagelogChannel->send(pBundle);
+		pLoggerChannel->send(pBundle);
 		
 		--hasBufferedLogPackets_;
 	}
@@ -406,18 +447,19 @@ void DebugHelper::onMessage(uint32 logType, const char * str, uint32 length)
 
 	if(g_componentType == MACHINE_TYPE || 
 		g_componentType == CONSOLE_TYPE || 
-		g_componentType == MESSAGELOG_TYPE || 
+		g_componentType == LOGGER_TYPE || 
 		g_componentType == CLIENT_TYPE)
 		return;
 
-	if(hasBufferedLogPackets_ > g_kbeSrvConfig.tickMaxBufferedLogs())
+	if(g_kbeSrvConfig.tickMaxBufferedLogs() > 0 && hasBufferedLogPackets_ > g_kbeSrvConfig.tickMaxBufferedLogs())
 	{
 		int8 v = Network::g_trace_packet;
 		Network::g_trace_packet = 0;
 
 #ifdef NO_USE_LOG4CXX
 #else
-		LOG4CXX_WARN(g_logger, "DebugHelper::onMessage: bufferedLogPackets is full, discard log-packets!\n");
+		LOG4CXX_WARN(g_logger, fmt::format("DebugHelper::onMessage: bufferedLogPackets is full({} > kbengine_defs.xml->logger->tick_max_buffered_logs->{}), discard logs!\n", 
+			hasBufferedLogPackets_, g_kbeSrvConfig.tickMaxBufferedLogs()));
 #endif
 
 		Network::g_trace_packet = v;
@@ -430,8 +472,9 @@ void DebugHelper::onMessage(uint32 logType, const char * str, uint32 length)
 
 	int8 v = Network::g_trace_packet;
 	Network::g_trace_packet = 0;
-	pBundle->newMessage(MessagelogInterface::writeLog);
+	pBundle->newMessage(LoggerInterface::writeLog);
 
+	(*pBundle) << getUserUID();
 	(*pBundle) << logType;
 	(*pBundle) << g_componentType;
 	(*pBundle) << g_componentID;
@@ -455,15 +498,17 @@ void DebugHelper::onMessage(uint32 logType, const char * str, uint32 length)
 }
 
 //-------------------------------------------------------------------------------------
-void DebugHelper::registerMessagelog(Network::MessageID msgID, Network::Address* pAddr)
+void DebugHelper::registerLogger(Network::MessageID msgID, Network::Address* pAddr)
 {
-	messagelogAddr_ = *pAddr;
+	loggerAddr_ = *pAddr;
+	ALERT_LOG_TO("logger_", true);
 }
 
 //-------------------------------------------------------------------------------------
-void DebugHelper::unregisterMessagelog(Network::MessageID msgID, Network::Address* pAddr)
+void DebugHelper::unregisterLogger(Network::MessageID msgID, Network::Address* pAddr)
 {
-	messagelogAddr_ = Network::Address::NONE;
+	loggerAddr_ = Network::Address::NONE;
+	ALERT_LOG_TO("", true);
 }
 
 //-------------------------------------------------------------------------------------
@@ -493,7 +538,9 @@ void DebugHelper::error_msg(const std::string& s)
 	onMessage(KBELOG_ERROR, s.c_str(), s.size());
 
 #if KBE_PLATFORM == PLATFORM_WIN32
+	set_errorcolor();
 	printf("[ERROR]: %s", s.c_str());
+	set_normalcolor();
 #endif
 }
 
@@ -550,9 +597,13 @@ void DebugHelper::script_info_msg(const std::string& s)
 	onMessage(KBELOG_TYPE_MAPPING(scriptMsgType_), s.c_str(), s.size());
 
 #if KBE_PLATFORM == PLATFORM_WIN32
+	set_errorcolor();
+
 	// 如果是用户手动设置的也输出为错误信息
 	if(log4cxx::ScriptLevel::SCRIPT_ERR == scriptMsgType_)
 		printf("[S_ERROR]: %s", s.c_str());
+
+	set_normalcolor();
 #endif
 }
 
@@ -572,7 +623,9 @@ void DebugHelper::script_error_msg(const std::string& s)
 	onMessage(KBELOG_SCRIPT_ERROR, s.c_str(), s.size());
 
 #if KBE_PLATFORM == PLATFORM_WIN32
+	set_errorcolor();
 	printf("[S_ERROR]: %s", s.c_str());
+	set_normalcolor();
 #endif
 }
 
@@ -614,6 +667,12 @@ void DebugHelper::warning_msg(const std::string& s)
 #endif
 
 	onMessage(KBELOG_WARNING, s.c_str(), s.size());
+
+#if KBE_PLATFORM == PLATFORM_WIN32
+	set_warningcolor();
+	//printf("[WARNING]: %s", s.c_str());
+	set_normalcolor();
+#endif
 }
 
 //-------------------------------------------------------------------------------------
@@ -630,11 +689,38 @@ void DebugHelper::critical_msg(const std::string& s)
 #endif
 
 #if KBE_PLATFORM == PLATFORM_WIN32
+	set_errorcolor();
 	printf("[FATAL]: %s", s.c_str());
+	set_normalcolor();
 #endif
 
 	onMessage(KBELOG_CRITICAL, buf, strlen(buf));
 	backtrace_msg();
+}
+
+//-------------------------------------------------------------------------------------
+void DebugHelper::set_errorcolor()
+{
+#if KBE_PLATFORM == PLATFORM_WIN32
+    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED);
+#endif
+}
+
+//-------------------------------------------------------------------------------------
+void DebugHelper::set_normalcolor()
+{
+#if KBE_PLATFORM == PLATFORM_WIN32
+    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED|FOREGROUND_GREEN|
+		FOREGROUND_BLUE);
+#endif
+}
+
+//-------------------------------------------------------------------------------------
+void DebugHelper::set_warningcolor()
+{
+#if KBE_PLATFORM == PLATFORM_WIN32
+    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED|FOREGROUND_GREEN);
+#endif
 }
 
 //-------------------------------------------------------------------------------------

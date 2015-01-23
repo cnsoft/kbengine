@@ -43,7 +43,7 @@ public:
 	void historyCommandCheck();
 	CString getHistoryCommand(bool isNextCommand);
 	void commitPythonCommand(CString strCommand);
-	Network::EventDispatcher & mainDispatcher()				{ return _dispatcher; }
+	Network::EventDispatcher & dispatcher()				{ return _dispatcher; }
 	Network::NetworkInterface & networkInterface()			{ return _networkInterface; }
 	HTREEITEM hasCheckApp(COMPONENT_TYPE type);
 
@@ -59,7 +59,8 @@ public:
 	void closeCurrTreeSelChannel();
 	Network::Address getTreeItemAddr(HTREEITEM hItem);
 	COMPONENT_TYPE getTreeItemComponent(HTREEITEM hItem);
-	
+	int32 getSelTreeItemUID();
+
 	bool hasTreeComponent(Components::ComponentInfos& cinfos);
 
 	void onReceiveRemoteLog(std::string str);
@@ -80,6 +81,8 @@ public:
 	void onReceiveProfileData(MemoryStream& s);
 
 	bool startProfile(std::string name, int8 type, uint32 timinglen);
+
+	void addThreadTask(thread::TPTask* tptask);
 protected:
 	HICON m_hIcon;
 

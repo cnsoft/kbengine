@@ -36,16 +36,16 @@ PendingLoginMgr::PendingLoginMgr(Network::NetworkInterface & networkInterface) :
 	networkInterface_(networkInterface),
 	start_(false)
 {
-	// dispatcher().addFrequentTask(this);
+	// dispatcher().addTask(this);
 }
 
 //-------------------------------------------------------------------------------------
 PendingLoginMgr::~PendingLoginMgr()
 {
-	//dispatcher().cancelFrequentTask(this);
+	//dispatcher().cancelTask(this);
 
 	PTINFO_MAP::iterator iter = pPLMap_.begin();
-	for(; iter != pPLMap_.end(); iter++)
+	for(; iter != pPLMap_.end(); ++iter)
 	{
 		delete iter->second;
 	}
@@ -70,7 +70,7 @@ bool PendingLoginMgr::add(PLInfos* infos)
 
 	if(!start_)
 	{
-		//dispatcher().addFrequentTask(this);
+		//dispatcher().addTask(this);
 		start_ = true;
 	}
 	

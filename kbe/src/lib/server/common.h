@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_SERVER_COMMON_HPP
-#define KBE_SERVER_COMMON_HPP
+#ifndef KBE_SERVER_COMMON_H
+#define KBE_SERVER_COMMON_H
 
 // common include
 #include "common/timer.h"
@@ -37,21 +37,21 @@ namespace KBEngine {
 #define NETWORK_MESSAGE_FORWARD(SEND_INTERFACE, SENDBUNDLE, FORWARDBUNDLE, MYCOMPONENT_ID, FORWARD_COMPONENT_ID)						\
 	SENDBUNDLE.newMessage(SEND_INTERFACE::forwardMessage);																				\
 	SENDBUNDLE << MYCOMPONENT_ID << FORWARD_COMPONENT_ID;																				\
-	FORWARDBUNDLE.finish(true);																											\
+	FORWARDBUNDLE.finiMessage(true);																									\
 	SENDBUNDLE.append(FORWARDBUNDLE);																									\
 
 // cellapp转发消息给客户端
 #define NETWORK_ENTITY_MESSAGE_FORWARD_CLIENT(ENTITYID, SENDBUNDLE, FORWARDBUNDLE)														\
 	SENDBUNDLE.newMessage(BaseappInterface::forwardMessageToClientFromCellapp);															\
 	SENDBUNDLE << ENTITYID;																												\
-	FORWARDBUNDLE.finish(true);																											\
+	FORWARDBUNDLE.finiMessage(true);																									\
 	SENDBUNDLE.append(FORWARDBUNDLE);																									\
 
 // cellapp转发消息给cellapp
 #define NETWORK_ENTITY_MESSAGE_FORWARD_CELLAPP(ENTITYID, SENDBUNDLE, FORWARDBUNDLE)														\
 	SENDBUNDLE.newMessage(BaseappInterface::forwardMessageToCellappFromCellapp);														\
 	SENDBUNDLE << ENTITYID;																												\
-	FORWARDBUNDLE.finish(true);																											\
+	FORWARDBUNDLE.finiMessage(true);																									\
 	SENDBUNDLE.append(FORWARDBUNDLE);	
 
 // cellapp转发消息给客户端开始
@@ -61,7 +61,7 @@ namespace KBEngine {
 
 // cellapp转发消息给客户端消息包追加消息
 #define NETWORK_ENTITY_MESSAGE_FORWARD_CLIENT_APPEND(SENDBUNDLE, FORWARDBUNDLE)															\
-	FORWARDBUNDLE.finish(true);																											\
+	FORWARDBUNDLE.finiMessage(true);																									\
 	SENDBUNDLE.append(FORWARDBUNDLE);																									\
 
 // 公共消息
@@ -98,14 +98,14 @@ namespace KBEngine {
 				BUNDLE.newMessage(LoginappInterface::MESSAGENAME);											\
 			}																								\
 			break;																							\
-		case MESSAGELOG_TYPE:																				\
+		case LOGGER_TYPE:																					\
 			{																								\
-				BUNDLE.newMessage(MessagelogInterface::MESSAGENAME);										\
+				BUNDLE.newMessage(LoggerInterface::MESSAGENAME);											\
 			}																								\
 			break;																							\
-		case BILLING_TYPE:																					\
+		case INTERFACES_TYPE:																				\
 			{																								\
-				BUNDLE.newMessage(BillingSystemInterface::MESSAGENAME);										\
+				BUNDLE.newMessage(InterfacesInterface::MESSAGENAME);										\
 			}																								\
 			break;																							\
 		default:																							\
@@ -167,4 +167,4 @@ uint16 datatype2id(std::string datatype);
 
 }
 
-#endif // KBE_SERVER_COMMON_HPP
+#endif // KBE_SERVER_COMMON_H

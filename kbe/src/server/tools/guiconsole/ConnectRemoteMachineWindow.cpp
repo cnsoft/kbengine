@@ -128,7 +128,7 @@ void CConnectRemoteMachineWindow::OnBnClickedOk()
 	}
 
 	endpoint->setnonblocking(false);
-	int8 findComponentTypes[] = {MESSAGELOG_TYPE, BASEAPP_TYPE, CELLAPP_TYPE, BASEAPPMGR_TYPE, CELLAPPMGR_TYPE, LOGINAPP_TYPE, DBMGR_TYPE, BOTS_TYPE, UNKNOWN_COMPONENT_TYPE};
+	int8 findComponentTypes[] = {LOGGER_TYPE, BASEAPP_TYPE, CELLAPP_TYPE, BASEAPPMGR_TYPE, CELLAPPMGR_TYPE, LOGINAPP_TYPE, DBMGR_TYPE, BOTS_TYPE, UNKNOWN_COMPONENT_TYPE};
 	int ifind = 0;
 
 	while(true)
@@ -147,7 +147,7 @@ void CConnectRemoteMachineWindow::OnBnClickedOk()
 		KBEngine::MachineInterface::onFindInterfaceAddrArgs7::staticAddToBundle(bhandler, KBEngine::getUserUID(), KBEngine::getUsername(), 
 			CONSOLE_TYPE, g_componentID, (COMPONENT_TYPE)findComponentType, 0, 0);
 
-		bhandler.send(*endpoint);
+		KBEngine::Network::Channel::send(*endpoint, &bhandler);
 
 		KBEngine::Network::TCPPacket packet;
 		packet.resize(65535);

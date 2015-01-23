@@ -36,7 +36,7 @@ bool _g_debug = false;
 void querystatistics(const char* strCommand, uint32 size)
 {
 	std::string op;
-	for(uint32 i=0; i<size; i++)
+	for(uint32 i=0; i<size; ++i)
 	{
 		if(strCommand[i] == ' ')
 			break;
@@ -246,6 +246,7 @@ __RECONNECT:
 		if (mysql_set_character_set(mysql(), "utf8") != 0)
 		{
 			ERROR_MSG("DBInterfaceMysql::attach: Could not set client connection character set to UTF-8\n" );
+			return false;
 		}
 
 		// 不需要关闭自动提交，底层会START TRANSACTION之后再COMMIT
@@ -515,7 +516,7 @@ bool DBInterfaceMysql::execute(const char* strCommand, uint32 size, MemoryStream
 			{
 				unsigned long *lengths = mysql_fetch_lengths(pResult);
 
-				for (uint32 i = 0; i < nfields; i++)
+				for (uint32 i = 0; i < nfields; ++i)
 				{
 					if (arow[i] == NULL)
 					{
@@ -583,7 +584,7 @@ bool DBInterfaceMysql::getTableItemNames(const char* tablename, std::vector<std:
 		unsigned int numFields = mysql_num_fields(result);
 		MYSQL_FIELD* fields = mysql_fetch_fields(result);
 
-		for(unsigned int i = 0; i < numFields; i++)
+		for(unsigned int i = 0; i < numFields; ++i)
 		{
 			itemNames.push_back(fields[i].name);
 		}
@@ -636,7 +637,7 @@ void DBInterfaceMysql::getFields(TABLE_FIELDS& outs, const char* tablename)
 	numFields = mysql_num_fields(result);
 	fields = mysql_fetch_fields(result);
 
-	for(unsigned int i=0; i<numFields; i++)
+	for(unsigned int i=0; i<numFields; ++i)
 	{
 		TABLE_FIELD& info = outs[fields[i].name];
 		info.name = fields[i].name;

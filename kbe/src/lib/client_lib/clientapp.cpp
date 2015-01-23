@@ -26,6 +26,7 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 #include "common/kbeversion.h"
 #include "helper/script_loglevel.h"
 #include "network/channel.h"
+#include "network/tcp_packet_sender.h"
 #include "network/tcp_packet_receiver.h"
 #include "thread/threadpool.h"
 #include "entitydef/entity_mailbox.h"
@@ -45,7 +46,6 @@ COMPONENT_ID g_componentID = 0;
 COMPONENT_ORDER g_componentGlobalOrder = 1;
 COMPONENT_ORDER g_componentGroupOrder = 1;
 GAME_TIME g_kbetime = 0;
-Network::Address lastAddr = Network::Address::NONE;
 
 KBE_SINGLETON_INIT(ClientApp);
 //-------------------------------------------------------------------------------------
@@ -60,8 +60,9 @@ scriptBaseTypes_(),
 gameTimer_(),
 componentType_(componentType),
 componentID_(componentID),
-mainDispatcher_(dispatcher),
+dispatcher_(dispatcher),
 networkInterface_(ninterface),
+pTCPPacketSender_(NULL),
 pTCPPacketReceiver_(NULL),
 pBlowfishFilter_(NULL),
 threadPool_(),
@@ -91,6 +92,21 @@ ClientApp::~ClientApp()
 void ClientApp::reset(void)
 {
 	state_ = C_STATE_INIT;
+
+	if(pServerChannel_ && pServerChannel_->pEndPoint())
+	{
+		pServerChannel_->stopSend();
+		networkInterface().dispatcher().deregisterReadFileDescriptor(*pServerChannel_->pEndPoint());
+		networkInterface().deregisterChannel(pServerChannel_);
+	}
+
+	pServerChannel_->pFilter(NULL);
+	pServerChannel_->pPacketSender(NULL);
+
+	SAFE_RELEASE(pTCPPacketSender_);
+	SAFE_RELEASE(pTCPPacketReceiver_);
+	SAFE_RELEASE(pBlowfishFilter_);
+
 	ClientObjectBase::reset();
 }
 
@@ -109,7 +125,7 @@ int ClientApp::unregisterPyObjectToScript(const char* attrName)
 //-------------------------------------------------------------------------------------	
 bool ClientApp::initializeBegin()
 {
-	gameTimer_ = this->mainDispatcher().addTimer(1000000 / g_kbeConfig.gameUpdateHertz(), this,
+	gameTimer_ = this->dispatcher().addTimer(1000000 / g_kbeConfig.gameUpdateHertz(), this,
 							reinterpret_cast<void *>(TIMEOUT_GAME_TICK));
 
 	ProfileVal::setWarningPeriod(stampsPerSecond() / g_kbeConfig.gameUpdateHertz());
@@ -180,7 +196,7 @@ bool ClientApp::installEntityDef()
 		return false;
 
 	// 初始化所有扩展模块
-	// demo/scripts/
+	// assets/scripts/
 	if(!EntityDef::initialize(scriptBaseTypes_, g_componentType)){
 		return false;
 	}
@@ -272,11 +288,17 @@ bool ClientApp::uninstallPyModules()
 //-------------------------------------------------------------------------------------		
 void ClientApp::finalise(void)
 {
-	if(pServerChannel_ && pServerChannel_->endpoint())
+	if(pServerChannel_ && pServerChannel_->pEndPoint())
+	{
+		pServerChannel_->stopSend();
+		networkInterface().dispatcher().deregisterReadFileDescriptor(*pServerChannel_->pEndPoint());
 		networkInterface().deregisterChannel(pServerChannel_);
+	}
 
+	pServerChannel_->pPacketSender(NULL);
+	SAFE_RELEASE(pTCPPacketSender_);
 	SAFE_RELEASE(pTCPPacketReceiver_);
-
+	
 	gameTimer_.cancel();
 	threadPool_.finalise();
 	ClientObjectBase::finalise();
@@ -318,13 +340,6 @@ void ClientApp::handleGameTick()
 	g_kbetime++;
 	threadPool_.onMainThreadTick();
 	
-	if(lastAddr.ip != 0)
-	{
-		networkInterface().deregisterChannel(lastAddr);
-		networkInterface().registerChannel(pServerChannel_);
-		lastAddr.ip = 0;
-	}
-
 	networkInterface().processAllChannelPackets(KBEngine::Network::MessageHandlers::pMainMessageHandlers);
 	tickSend();
 
@@ -351,30 +366,9 @@ void ClientApp::handleGameTick()
 			{
 				state_ = C_STATE_PLAY;
 
-				bool exist = false;
-
-				if(pServerChannel_->endpoint())
-				{
-					lastAddr = pServerChannel_->endpoint()->addr();
-					networkInterface().dispatcher().deregisterFileDescriptor(*pServerChannel_->endpoint());
-					exist = networkInterface().findChannel(pServerChannel_->endpoint()->addr()) != NULL;
-				}
-
-				bool ret = initBaseappChannel() != NULL;
+				bool ret = updateChannel(false, "", "", "", 0);
 				if(ret)
 				{
-					if(!exist)
-					{
-						networkInterface().registerChannel(pServerChannel_);
-						pTCPPacketReceiver_ = new Network::TCPPacketReceiver(*pServerChannel_->endpoint(), networkInterface());
-					}
-					else
-					{
-						pTCPPacketReceiver_->endpoint(pServerChannel_->endpoint());
-					}
-
-					networkInterface().dispatcher().registerFileDescriptor(*pServerChannel_->endpoint(), pTCPPacketReceiver_);
-					
 					// 先握手然后等helloCB之后再进行登录
 					Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 					(*pBundle).newMessage(BaseappInterface::hello);
@@ -393,7 +387,8 @@ void ClientApp::handleGameTick()
 						(*pBundle).appendBlob(key);
 					}
 
-					pServerChannel_->pushBundle(pBundle);
+					Network::Channel::send(*pServerChannel_->pEndPoint(), pBundle);
+					Network::Bundle::ObjPool().reclaimObject(pBundle);
 					// ret = ClientObjectBase::loginGateWay();
 				}
 			}
@@ -420,14 +415,14 @@ void ClientApp::handleGameTick()
 //-------------------------------------------------------------------------------------		
 bool ClientApp::run(void)
 {
-	mainDispatcher_.processUntilBreak();
+	dispatcher_.processUntilBreak();
 	return true;
 }
 
 //-------------------------------------------------------------------------------------		
 int ClientApp::processOnce(bool shouldIdle)
 {
-	return mainDispatcher_.processOnce(shouldIdle);
+	return dispatcher_.processOnce(shouldIdle);
 }
 
 //-------------------------------------------------------------------------------------
@@ -544,7 +539,7 @@ PyObject* ClientApp::__py_setScriptLogType(PyObject* self, PyObject* args)
 void ClientApp::shutDown()
 {
 	INFO_MSG("ClientApp::shutDown: shutting down\n");
-	mainDispatcher_.breakProcessing();
+	dispatcher_.breakProcessing();
 }
 
 //-------------------------------------------------------------------------------------	
@@ -563,38 +558,49 @@ void ClientApp::onChannelTimeOut(Network::Channel * pChannel)
 }
 
 //-------------------------------------------------------------------------------------	
+bool ClientApp::updateChannel(bool loginapp, std::string accountName, std::string passwd, 
+								   std::string ip, KBEngine::uint32 port)
+{
+	if(pServerChannel_->pEndPoint())
+	{
+		pServerChannel_->stopSend();
+		networkInterface().dispatcher().deregisterReadFileDescriptor(*pServerChannel_->pEndPoint());
+		networkInterface().deregisterChannel(pServerChannel_);
+	}
+
+	bool ret = loginapp ? (initLoginappChannel(accountName, passwd, ip, port) != NULL) : (initBaseappChannel() != NULL);
+	if(ret)
+	{
+		if(pTCPPacketReceiver_)
+			pTCPPacketReceiver_->pEndPoint(pServerChannel_->pEndPoint());
+		else
+			pTCPPacketReceiver_ = new Network::TCPPacketReceiver(*pServerChannel_->pEndPoint(), networkInterface());
+
+		if(pTCPPacketSender_)
+			pTCPPacketSender_->pEndPoint(pServerChannel_->pEndPoint());
+		else
+			pTCPPacketSender_ = new Network::TCPPacketSender(*pServerChannel_->pEndPoint(), networkInterface());
+
+		pServerChannel_->pPacketSender(pTCPPacketSender_);
+		networkInterface().registerChannel(pServerChannel_);
+		networkInterface().dispatcher().registerReadFileDescriptor(*pServerChannel_->pEndPoint(), pTCPPacketReceiver_);
+	}
+
+	return ret;
+}
+
+//-------------------------------------------------------------------------------------	
 bool ClientApp::login(std::string accountName, std::string passwd, 
 								   std::string ip, KBEngine::uint32 port)
 {
 	connectedGateway_ = false;
 
-	bool exist = false;
-	
 	if(canReset_)
 		reset();
 
-	if(pServerChannel_->endpoint())
-	{
-		lastAddr = pServerChannel_->endpoint()->addr();
-		networkInterface().dispatcher().deregisterFileDescriptor(*pServerChannel_->endpoint());
-		exist = networkInterface().findChannel(pServerChannel_->endpoint()->addr()) != NULL;
-	}
-
-	bool ret = initLoginappChannel(accountName, passwd, ip, port) != NULL;
+	bool ret = updateChannel(true, accountName, passwd, ip, port);
 	if(ret)
 	{
-		if(!exist)
-		{
-			networkInterface().registerChannel(pServerChannel_);
-			pTCPPacketReceiver_ = new Network::TCPPacketReceiver(*pServerChannel_->endpoint(), networkInterface());
-		}
-		else
-		{
-			pTCPPacketReceiver_->endpoint(pServerChannel_->endpoint());
-		}
-
-		networkInterface().dispatcher().registerFileDescriptor(*pServerChannel_->endpoint(), pTCPPacketReceiver_);
-		
 		// 先握手然后等helloCB之后再进行登录
 		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 		(*pBundle).newMessage(LoginappInterface::hello);
@@ -612,7 +618,8 @@ bool ClientApp::login(std::string accountName, std::string passwd,
 			(*pBundle).appendBlob(key);
 		}
 
-		pServerChannel_->pushBundle(pBundle);
+		Network::Channel::send(*pServerChannel_->pEndPoint(), pBundle);
+		Network::Bundle::ObjPool().reclaimObject(pBundle);
 		//ret = ClientObjectBase::login();
 	}
 

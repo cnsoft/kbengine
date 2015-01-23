@@ -19,8 +19,8 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#ifndef KBE_BASEAPP_HPP
-#define KBE_BASEAPP_HPP
+#ifndef KBE_BASEAPP_H
+#define KBE_BASEAPP_H
 	
 // common include	
 #include "base.h"
@@ -96,14 +96,9 @@ public:
 
 	virtual bool initializeWatcher();
 
-	float getLoad()const { return load_; }
-	
-	void updateLoad();
-
-	static uint64 checkTickPeriod();
-
-	static int quantumPassedPercent(uint64 curr = timestamp());
 	static PyObject* __py_quantumPassedPercent(PyObject* self, PyObject* args);
+	float _getLoad()const { return getLoad(); }
+	virtual void onUpdateLoad();
 
 	virtual void onChannelDeregister(Network::Channel * pChannel);
 
@@ -470,10 +465,6 @@ protected:
 	KBEShared_ptr< Backuper >								pBackuper_;	
 	KBEShared_ptr< Archiver >								pArchiver_;	
 
-	float													load_;
-
-	static uint64											_g_lastTimestamp;
-
 	int32													numProxices_;
 
 	TelnetServer*											pTelnetServer_;
@@ -485,4 +476,4 @@ protected:
 
 }
 
-#endif // KBE_BASEAPP_HPP
+#endif // KBE_BASEAPP_H

@@ -39,8 +39,8 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 #include "../../server/cellapp/cellapp_interface.h"
 #include "../../server/dbmgr/dbmgr_interface.h"
 #include "../../server/loginapp/loginapp_interface.h"
-#include "../../server/tools/message_log/messagelog_interface.h"
-#include "../../server/tools/billing_system/billingsystem_interface.h"
+#include "../../server/tools/logger/logger_interface.h"
+#include "../../server/tools/interfaces/interfaces_interface.h"
 
 namespace KBEngine{
 COMPONENT_TYPE g_componentType = UNKNOWN_COMPONENT_TYPE;
@@ -61,7 +61,7 @@ Network::ChannelTimeOutHandler(),
 Components::ComponentsNotificationHandler(),
 componentType_(componentType),
 componentID_(componentID),
-mainDispatcher_(dispatcher),
+dispatcher_(dispatcher),
 networkInterface_(ninterface),
 timers_(),
 startGlobalOrder_(-1),
@@ -95,7 +95,7 @@ void ServerApp::shutDown(float shutdowntime)
 		pShutdowner_ = new Shutdowner(this);
 
 	pShutdowner_->shutdown(shutdowntime < 0.f ? g_kbeSrvConfig.shutdowntime() : shutdowntime, 
-		g_kbeSrvConfig.shutdownWaitTickTime(), mainDispatcher_);
+		g_kbeSrvConfig.shutdownWaitTickTime(), dispatcher_);
 }
 
 //-------------------------------------------------------------------------------------
@@ -105,7 +105,7 @@ void ServerApp::onShutdownBegin()
 	printf("[INFO]: shutdown begin.\n");
 #endif
 
-	mainDispatcher_.setWaitBreakProcessing();
+	dispatcher_.setWaitBreakProcessing();
 }
 
 //-------------------------------------------------------------------------------------
@@ -116,7 +116,7 @@ void ServerApp::onShutdown(bool first)
 //-------------------------------------------------------------------------------------
 void ServerApp::onShutdownEnd()
 {
-	mainDispatcher_.breakProcessing();
+	dispatcher_.breakProcessing();
 }
 
 //-------------------------------------------------------------------------------------
@@ -156,7 +156,7 @@ bool ServerApp::initialize()
 	// 广播自己的地址给网上上的所有kbemachine
 	// 并且从kbemachine获取basappmgr和cellappmgr以及dbmgr地址
 	Components::getSingleton().pHandler(this);
-	this->mainDispatcher().addFrequentTask(&Components::getSingleton());
+	this->dispatcher().addTask(&Components::getSingleton());
 
 	bool ret = initializeEnd();
 
@@ -197,22 +197,22 @@ void ServerApp::queryWatcher(Network::Channel* pChannel, MemoryStream& s)
 	MemoryStream::SmartPoolObjectPtr readStreamPtr1 = MemoryStream::createSmartPoolObj();
 	WatcherPaths::root().readChildPaths(path, path, readStreamPtr1.get()->get());
 
-	Network::Bundle bundle;
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 	ConsoleInterface::ConsoleWatcherCBMessageHandler msgHandler;
-	bundle.newMessage(msgHandler);
+	(*pBundle).newMessage(msgHandler);
 
 	uint8 type = 0;
-	bundle << type;
-	bundle.append(readStreamPtr.get()->get());
-	bundle.send(networkInterface(), pChannel);
+	(*pBundle) << type;
+	(*pBundle).append(readStreamPtr.get()->get());
+	pChannel->send(pBundle);
 
-	Network::Bundle bundle1;
-	bundle1.newMessage(msgHandler);
+	Network::Bundle* pBundle1 = Network::Bundle::ObjPool().createObject();
+	(*pBundle1).newMessage(msgHandler);
 
 	type = 1;
-	bundle1 << type;
-	bundle1.append(readStreamPtr1.get()->get());
-	bundle1.send(networkInterface(), pChannel);
+	(*pBundle1) << type;
+	(*pBundle1).append(readStreamPtr1.get()->get());
+	pChannel->send(pBundle1);
 }
 
 //-------------------------------------------------------------------------------------		
@@ -259,7 +259,7 @@ void ServerApp::handleTimers()
 //-------------------------------------------------------------------------------------		
 bool ServerApp::run(void)
 {
-	mainDispatcher_.processUntilBreak();
+	dispatcher_.processUntilBreak();
 	return true;
 }
 
@@ -298,9 +298,9 @@ void ServerApp::onChannelTimeOut(Network::Channel * pChannel)
 //-------------------------------------------------------------------------------------
 void ServerApp::onAddComponent(const Components::ComponentInfos* pInfos)
 {
-	if(pInfos->componentType == MESSAGELOG_TYPE)
+	if(pInfos->componentType == LOGGER_TYPE)
 	{
-		DebugHelper::getSingleton().registerMessagelog(MessagelogInterface::writeLog.msgID, pInfos->pIntAddr.get());
+		DebugHelper::getSingleton().registerLogger(LoggerInterface::writeLog.msgID, pInfos->pIntAddr.get());
 	}
 }
 
@@ -316,13 +316,17 @@ void ServerApp::onIdentityillegal(COMPONENT_TYPE componentType, COMPONENT_ID com
 //-------------------------------------------------------------------------------------
 void ServerApp::onRemoveComponent(const Components::ComponentInfos* pInfos)
 {
-	if(pInfos->componentType == MESSAGELOG_TYPE)
+	if(pInfos->componentType == LOGGER_TYPE)
 	{
-		DebugHelper::getSingleton().unregisterMessagelog(MessagelogInterface::writeLog.msgID, pInfos->pIntAddr.get());
+		DebugHelper::getSingleton().unregisterLogger(LoggerInterface::writeLog.msgID, pInfos->pIntAddr.get());
 	}
 	else if(pInfos->componentType == DBMGR_TYPE)
 	{
-		if(g_componentType != MACHINE_TYPE)
+		if(g_componentType != MACHINE_TYPE && 
+			g_componentType != LOGGER_TYPE && 
+			g_componentType != INTERFACES_TYPE &&
+			g_componentType != BOTS_TYPE &&
+			g_componentType != WATCHER_TYPE)
 			this->shutDown(0.f);
 	}
 }
@@ -452,9 +456,7 @@ void ServerApp::lookApp(Network::Channel* pChannel)
 	int8 istate = int8(state);
 	(*pBundle) << istate;
 
-	(*pBundle).send(networkInterface(), pChannel);
-
-	Network::Bundle::ObjPool().reclaimObject(pBundle);
+	pChannel->send(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
@@ -466,10 +468,7 @@ void ServerApp::reqCloseServer(Network::Channel* pChannel, MemoryStream& s)
 	
 	bool success = true;
 	(*pBundle) << success;
-	(*pBundle).send(networkInterface(), pChannel);
-
-	Network::Bundle::ObjPool().reclaimObject(pBundle);
-
+	pChannel->send(pBundle);
 	this->shutDown();
 }
 
@@ -492,7 +491,7 @@ void ServerApp::hello(Network::Channel* pChannel, MemoryStream& s)
 	{
 		char *c = buf;
 
-		for (int i=0; i < (int)encryptedKey.size(); i++)
+		for (int i=0; i < (int)encryptedKey.size(); ++i)
 		{
 			c += sprintf(c, "%02hhX ", (unsigned char)encryptedKey.data()[i]);
 		}

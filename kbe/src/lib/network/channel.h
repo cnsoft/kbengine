@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_NETWORKCHANCEL_HPP
-#define KBE_NETWORKCHANCEL_HPP
+#ifndef KBE_NETWORKCHANCEL_H
+#define KBE_NETWORKCHANCEL_H
 
 #include "common/common.h"
 #include "common/timer.h"
@@ -45,6 +45,7 @@ class Bundle;
 class NetworkInterface;
 class MessageHandlers;
 class PacketReader;
+class PacketSender;
 
 class Channel : public TimerHandler, public RefCountable, public PoolObject
 {
@@ -70,19 +71,12 @@ public:
 		CHANNEL_WEB = 1,
 	};
 
-	enum AddToReceiveWindowResult
-	{
-		SHOULD_PROCESS,
-		SHOULD_NOT_PROCESS,
-		PACKET_IS_CORRUPT
-	};
-
 	typedef std::vector<Packet*> BufferedReceives;
 public:
 	Channel();
 
 	Channel(NetworkInterface & networkInterface, 
-		const EndPoint * endpoint, 
+		const EndPoint * pEndPoint, 
 		Traits traits, 
 		ProtocolType pt = PROTOCOL_TCP, 
 		PacketFilterPtr pFilter = NULL, 
@@ -120,27 +114,33 @@ public:
 	void pNetworkInterface(NetworkInterface* pNetworkInterface) { pNetworkInterface_ = pNetworkInterface; }
 
 	INLINE const Address& addr() const;
-	void endpoint(const EndPoint* endpoint);
-	INLINE EndPoint * endpoint() const;
+	void pEndPoint(const EndPoint* pEndPoint);
+	INLINE EndPoint * pEndPoint() const;
 
 	typedef std::vector<Bundle*> Bundles;
 	Bundles & bundles();
 	
 	int32 bundlesLength();
 
-	void pushBundle(Bundle* pBundle);
-
 	const Bundles & bundles() const;
 
 	void clearBundle();
 
+	bool sending()const { return sending_;}
+	void stopSend();
+
 	void send(Bundle * pBundle = NULL);
+	static void send(EndPoint& ep, Bundle * pBundle);
+	static void sendto(EndPoint& ep, Bundle * pBundle, u_int16_t networkPort, u_int32_t networkAddr = BROADCAST);
+
 	void delayedSend();
 
-	void reset(const EndPoint* endpoint, bool warnOnDiscard = true);
+	void reset(const EndPoint* pEndPoint, bool warnOnDiscard = true);
 
 
 	INLINE PacketReader* pPacketReader()const;
+	INLINE PacketSender* pPacketSender()const;
+	INLINE void pPacketSender(PacketSender* pPacketSender);
 	INLINE PacketReceiver* pPacketReceiver()const;
 
 	Traits traits() const { return traits_; }
@@ -148,9 +148,10 @@ public:
 	bool isInternal() const { return traits_ == INTERNAL; }
 		
 	void onPacketReceived(int bytes);
-	
+	void onPacketSent(int bytes, bool sentCompleted);
+	void onSendCompleted();
+
 	const char * c_str() const;
-	int windowSize() const;
 	ChannelID id() const	{ return id_; }
 	
 	uint32	numPacketsSent() const		{ return numPacketsSent_; }
@@ -160,8 +161,6 @@ public:
 		
 	uint64 lastReceivedTime()const		{ return lastReceivedTime_; }
 	void updateLastReceivedTime()		{ lastReceivedTime_ = timestamp(); }
-
-	PacketReceiver* packetReceiver()const { return pPacketReceiver_; }
 		
 	void addReceiveWindow(Packet* pPacket);
 	
@@ -186,8 +185,8 @@ public:
 	KBEngine::Network::MessageHandlers* pMsgHandlers()const { return pMsgHandlers_; }
 	void pMsgHandlers(KBEngine::Network::MessageHandlers* pMsgHandlers) { pMsgHandlers_ = pMsgHandlers; }
 
-	void readDataToBuffer();
 	bool waitSend();
+
 private:
 	enum TimeOutType
 	{
@@ -198,6 +197,8 @@ private:
 	void clearState( bool warnOnDiscard = false );
 	EventDispatcher & dispatcher();
 
+	bool initialize();
+	bool finalise();
 private:
 	NetworkInterface * 			pNetworkInterface_;
 	Traits						traits_;
@@ -212,8 +213,6 @@ private:
 	uint64						lastReceivedTime_;
 	
 	Bundles						bundles_;
-
-	uint32						windowSize_;
 	
 	uint8						bufferedReceivesIdx_;
 	BufferedReceives			bufferedReceives_[2];
@@ -228,11 +227,14 @@ private:
 	uint32						numBytesSent_;
 	uint32						numBytesReceived_;
 	uint32						lastTickBytesReceived_;
+	uint32						lastTickBytesSent_;
 
 	PacketFilterPtr				pFilter_;
 	
 	EndPoint *					pEndPoint_;
 	PacketReceiver*				pPacketReceiver_;
+	PacketSender*				pPacketSender_;
+	bool						sending_;
 
 	// 如果为true， 则该频道已经变得不合法
 	bool						isCondemn_;
@@ -259,4 +261,4 @@ typedef SmartPointer<Channel> ChannelPtr;
 #ifdef CODE_INLINE
 #include "channel.inl"
 #endif
-#endif // KBE_NETWORKCHANCEL_HPP
+#endif // KBE_NETWORKCHANCEL_H

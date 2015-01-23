@@ -27,13 +27,13 @@ BASEAPP_TYPE			= 6
 CLIENT_TYPE				= 7
 MACHINE_TYPE			= 8
 CONSOLE_TYPE			= 9
-MESSAGELOG_TYPE			= 10
+LOGGER_TYPE				= 10
 BOTS_TYPE				= 11
 WATCHER_TYPE			= 12
-BILLING_TYPE			= 13
+INTERFACES_TYPE			= 13
 COMPONENT_END_TYPE		= 16
 
-# ת
+# 组件名称转换为类别
 COMPONENT_NAME2TYPE = {
 	"unknown"		: UNKNOWN_COMPONENT_TYPE,
 	"dbmgr"			: DBMGR_TYPE,
@@ -43,13 +43,12 @@ COMPONENT_NAME2TYPE = {
 	"cellapp" 		: CELLAPP_TYPE,
 	"baseapp" 		: BASEAPP_TYPE,
 	"client" 		: CLIENT_TYPE,
-	"kbmachine"		: MACHINE_TYPE,
+	"machine"		: MACHINE_TYPE,
 	"console" 		: CONSOLE_TYPE,
-	"messagelog" 	: MESSAGELOG_TYPE,
+	"logger" 		: LOGGER_TYPE,
 	"bots" 			: BOTS_TYPE,
 	"watcher" 		: WATCHER_TYPE,
-	"billing" 		: BILLING_TYPE,
-	"billingsystem" : BILLING_TYPE
+	"interfaces" 	: INTERFACES_TYPE,
 }
 
 #  
@@ -62,14 +61,12 @@ COMPONENT_NAME = (
 	"cellapp",
 	"baseapp",
 	"client",
-	"kbmachine",
-	"kbcenter",
+	"machine",
 	"console",
-	"messagelog",
-	"resourcemgr",
+	"logger",
 	"bots",
 	"watcher",
-	"billing",
+	"interfaces",
 )
 
 
@@ -109,7 +106,7 @@ class ClusterControllerHandler:
 		while(dectrycount > 0):
 			try:
 				dectrycount = trycount
-				recvdata, address = self.udp_socket.recvfrom(4096)
+				recvdata, address = self.udp_socket.recvfrom(10240)
 				self.recvDatas.append(recvdata)
 				#print ("received %r from %r" % (self.recvDatas, address))
 			except socket.timeout: 
@@ -295,6 +292,7 @@ class ClusterConsoleHandler(ClusterControllerHandler):
 		
 	def do(self):
 		self._interfaces_groups = {}
+		print("finding(" + self.consoleType  + ")...")
 		self.queryAllInterfaces()
 		interfaces = self._interfaces
 		
@@ -304,10 +302,13 @@ class ClusterConsoleHandler(ClusterControllerHandler):
 				info = infos.pop(0)
 
 			for info in infos:
-				if COMPONENT_NAME[info[16]] + str(info[3]) == self.consoleType:
+				if COMPONENT_NAME[info[16]] + str(info[3]) == self.consoleType or \
+					COMPONENT_NAME[info[16]] + str("%02d" %(info[3])) == self.consoleType:
 					os.system('telnet %s %i' % (socket.inet_ntoa(struct.pack('I', info[9])), info[20]))
-					
-
+					return
+		
+		print("not found " + self.consoleType  + "!")
+		
 class ClusterQueryHandler(ClusterControllerHandler):
 	def __init__(self, uid):
 		ClusterControllerHandler.__init__(self)
@@ -468,8 +469,8 @@ class ClusterStopHandler(ClusterControllerHandler):
 		print("online-components:")
 		printed = []
 		for ctype in self.startTemplate:
-			if ctype not in COMPONENT_NAME2TYPE or ctype == "kbmachine":
-				if(ctype != "kbmachine"):
+			if ctype not in COMPONENT_NAME2TYPE or ctype == "machine":
+				if(ctype != "machine"):
 					print("not found %s, stop failed!" % ctype)
 				continue
 			
@@ -512,7 +513,7 @@ class ClusterStopHandler(ClusterControllerHandler):
 			
 			waitcount = 0
 			for ctype in interfacesCount:
-				if ctype not in COMPONENT_NAME2TYPE or ctype not in self.startTemplate or ctype == "kbmachine":
+				if ctype not in COMPONENT_NAME2TYPE or ctype not in self.startTemplate or ctype == "machine":
 					continue
 			
 				infos = self._interfaces.get(COMPONENT_NAME2TYPE[ctype], [])

@@ -21,7 +21,7 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 #include "script.h"
 #include "py_gc.h"
 #include "scriptstdouterr.h"
-#include "pyattr_macro.h"
+#include "py_macros.h"
 #include "helper/profile.h"
 
 namespace KBEngine{ namespace script {
@@ -222,7 +222,7 @@ void PyGC::decTracing(std::string name)
 void PyGC::debugTracing(bool shuttingdown)
 {
 	KBEUnordered_map<std::string, int>::iterator iter = tracingCountMap_.begin();
-	for(; iter != tracingCountMap_.end(); iter++)
+	for(; iter != tracingCountMap_.end(); ++iter)
 	{
 		if(shuttingdown)
 		{

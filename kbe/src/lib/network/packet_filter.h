@@ -19,8 +19,8 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#ifndef KBE_PACKET_FILTER_HPP
-#define KBE_PACKET_FILTER_HPP
+#ifndef KBE_PACKET_FILTER_H
+#define KBE_PACKET_FILTER_H
 
 #include "network/common.h"
 #include "common/smartpointer.h"
@@ -36,14 +36,14 @@ class Packet;
 class Address;
 class PacketFilter;
 class PacketReceiver;
-
+class PacketSender;
 
 class PacketFilter : public RefCountable
 {
 public:
 	virtual ~PacketFilter() {}
 
-	virtual Reason send(NetworkInterface & networkInterface, Channel * pChannel, Packet * pPacket);
+	virtual Reason send(Channel * pChannel, PacketSender& sender, Packet * pPacket);
 
 	virtual Reason recv(Channel * pChannel, PacketReceiver & receiver, Packet * pPacket);
 };
@@ -57,4 +57,4 @@ typedef SmartPointer<PacketFilter> PacketFilterPtr;
 #include "packet_filter.inl"
 #endif
 
-#endif // KBE_PACKET_FILTER_HPP
+#endif // KBE_PACKET_FILTER_H

@@ -19,8 +19,8 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#ifndef KBE_CELLAPPMGR_HPP
-#define KBE_CELLAPPMGR_HPP
+#ifndef KBE_CELLAPPMGR_H
+#define KBE_CELLAPPMGR_H
 	
 #include "cellapp.h"
 #include "server/kbemain.h"
@@ -32,6 +32,7 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 #include "network/endpoint.h"
 
 namespace KBEngine{
+
 
 class Cellappmgr :	public ServerApp, 
 					public Singleton<Cellappmgr>
@@ -84,7 +85,18 @@ public:
 	/** 网络接口
 		更新cellapp情况。
 	*/
-	void updateCellapp(Network::Channel* pChannel, COMPONENT_ID componentID, float load);
+	void updateCellapp(Network::Channel* pChannel, COMPONENT_ID componentID, ENTITY_ID numEntities, float load);
+
+	/** 网络接口
+		cellapp同步自己的初始化信息
+		startGlobalOrder: 全局启动顺序 包括各种不同组件
+		startGroupOrder: 组内启动顺序， 比如在所有baseapp中第几个启动。
+	*/
+	void onCellappInitProgress(Network::Channel* pChannel, COMPONENT_ID cid, float progress);
+
+	bool componentsReady();
+	bool componentReady(COMPONENT_ID cid);
+
 protected:
 	TimerHandle							gameTimer_;
 	ForwardAnywhere_MessageBuffer		forward_cellapp_messagebuffer_;
@@ -96,4 +108,4 @@ protected:
 
 }
 
-#endif // KBE_CELLAPPMGR_HPP
+#endif // KBE_CELLAPPMGR_H

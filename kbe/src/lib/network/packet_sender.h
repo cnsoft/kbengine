@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_NETWORKPACKET_SENDER_HPP
-#define KBE_NETWORKPACKET_SENDER_HPP
+#ifndef KBE_NETWORKPACKET_SENDER_H
+#define KBE_NETWORKPACKET_SENDER_H
 
 #include "common/common.h"
 #include "common/timer.h"
@@ -37,18 +37,43 @@ class Address;
 class NetworkInterface;
 class EventDispatcher;
 
-class PacketSender : public OutputNotificationHandler
+class PacketSender : public OutputNotificationHandler, public PoolObject
 {
 public:
+	PacketSender();
 	PacketSender(EndPoint & endpoint, NetworkInterface & networkInterface);
 	virtual ~PacketSender();
 
 	EventDispatcher& dispatcher();
-protected:
+
+	void onReclaimObject()
+	{
+		pEndpoint_ = NULL;
+		pNetworkInterface_ = NULL;
+	}
+
+	void pEndPoint(EndPoint* pEndpoint){ 
+		pEndpoint_ = pEndpoint; 
+	}
+
+	EndPoint* pEndPoint()const { 
+		return pEndpoint_; 
+	}
+
 	virtual int handleOutputNotification(int fd);
+
+	virtual Reason processPacket(Channel* pChannel, Packet * pPacket);
+	virtual Reason processFilterPacket(Channel* pChannel, Packet * pPacket) = 0;
+
+	static Reason checkSocketErrors(const EndPoint * pEndpoint);
+
+	virtual Channel* getChannel();
+
+	virtual bool processSend(Channel* pChannel) = 0;
+
 protected:
-	EndPoint & endpoint_;
-	NetworkInterface & networkInterface_;
+	EndPoint* pEndpoint_;
+	NetworkInterface* pNetworkInterface_;
 };
 
 }
@@ -57,4 +82,4 @@ protected:
 #ifdef CODE_INLINE
 #include "packet_sender.inl"
 #endif
-#endif // KBE_NETWORKPACKET_SENDER_HPP
+#endif // KBE_NETWORKPACKET_SENDER_H

@@ -20,10 +20,6 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "baseapp.h"
 #include "initprogress_handler.h"
-#include "entitydef/scriptdef_module.h"
-#include "entitydef/entity_macro.h"
-#include "network/fixed_messages.h"
-#include "math/math.h"
 #include "network/bundle.h"
 #include "network/channel.h"
 
@@ -34,15 +30,16 @@ namespace KBEngine{
 //-------------------------------------------------------------------------------------
 InitProgressHandler::InitProgressHandler(Network::NetworkInterface & networkInterface):
 Task(),
-networkInterface_(networkInterface)
+networkInterface_(networkInterface),
+delayTicks_(0)
 {
-	networkInterface.dispatcher().addFrequentTask(this);
+	networkInterface.dispatcher().addTask(this);
 }
 
 //-------------------------------------------------------------------------------------
 InitProgressHandler::~InitProgressHandler()
 {
-	// networkInterface_.mainDispatcher().cancelFrequentTask(this);
+	// networkInterface_.dispatcher().cancelTask(this);
 	DEBUG_MSG("InitProgressHandler::~InitProgressHandler()\n");
 }
 
@@ -62,6 +59,12 @@ bool InitProgressHandler::process()
 	}
 
 	if(pChannel == NULL)
+		return true;
+
+	if(Baseapp::getSingleton().idClient().getSize() == 0)
+		return true;
+
+	if(delayTicks_++ < 1)
 		return true;
 
 	float v = 0.0f;
@@ -114,11 +117,11 @@ bool InitProgressHandler::process()
 		completed = true;
 	}
 
-	Network::Bundle::SmartPoolObjectPtr bundleptr = Network::Bundle::createSmartPoolObj();
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 
-	(*bundleptr)->newMessage(BaseappmgrInterface::onBaseappInitProgress);
-	(*(*bundleptr)) << g_componentID << v;
-	(*bundleptr)->send(networkInterface_, pChannel);
+	(*pBundle).newMessage(BaseappmgrInterface::onBaseappInitProgress);
+	(*pBundle) << g_componentID << v;
+	pChannel->send(pBundle);
 
 	if(completed)
 	{

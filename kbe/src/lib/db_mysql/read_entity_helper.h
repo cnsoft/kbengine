@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_READ_ENTITY_HELPER_HPP
-#define KBE_READ_ENTITY_HELPER_HPP
+#ifndef KBE_READ_ENTITY_HELPER_H
+#define KBE_READ_ENTITY_HELPER_H
 
 // common include	
 // #define NDEBUG
@@ -92,7 +92,7 @@ public:
 				if(nfields > 1)
 				{
 					KBE_ASSERT(nfields == context.items.size() + 1);
-					for (uint32 i = 1; i < nfields; i++)
+					for (uint32 i = 1; i < nfields; ++i)
 					{
 						KBEShared_ptr<DBContext::DB_ITEM_DATA> pSotvs = context.items[i - 1];
 						std::string data;
@@ -117,7 +117,7 @@ public:
 		// 在这里我们让子表一次查询出所有的dbids数据然后填充到结果集
 
 		DBContext::DB_RW_CONTEXTS::iterator iter1 = context.optable.begin();
-		for(; iter1 != context.optable.end(); iter1++)
+		for(; iter1 != context.optable.end(); ++iter1)
 		{
 			DBContext& wbox = *iter1->second.get();
 			if(!queryChildDB(dbi, wbox, dbids))
@@ -182,7 +182,7 @@ public:
 				if(nfields > const_fields)
 				{
 					KBE_ASSERT(nfields == context.items.size() + const_fields);
-					for (uint32 i = const_fields; i < nfields; i++)
+					for (uint32 i = const_fields; i < nfields; ++i)
 					{
 						KBEShared_ptr<DBContext::DB_ITEM_DATA> pSotvs = context.items[i - const_fields];
 						std::string data;
@@ -204,7 +204,7 @@ public:
 		// 每一个dbid都需要获得子表上的数据
 		// 在这里我们让子表一次查询出所有的dbids数据然后填充到结果集
 		DBContext::DB_RW_CONTEXTS::iterator iter1 = context.optable.begin();
-		for(; iter1 != context.optable.end(); iter1++)
+		for(; iter1 != context.optable.end(); ++iter1)
 		{
 			DBContext& wbox = *iter1->second.get();
 
@@ -218,4 +218,4 @@ protected:
 };
 
 }
-#endif // KBE_READ_ENTITY_HELPER_HPP
+#endif // KBE_READ_ENTITY_HELPER_H

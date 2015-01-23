@@ -61,7 +61,6 @@ void Backuper::tick()
 		this->createBackupTable();
 	}
 
-	Network::Bundle bundle;
 	while((numToBackUp > 0) && !backupEntityIDs_.empty())
 	{
 		Base * pBase = Baseapp::getSingleton().findEntity(backupEntityIDs_.back());
@@ -71,8 +70,8 @@ void Backuper::tick()
 		if (pBase && backup(*pBase, *s))
 		{
 			--numToBackUp;
-			bundle.append(*s);
 		}
+
 		MemoryStream::ObjPool().reclaimObject(s);
 	}
 }
@@ -96,7 +95,7 @@ void Backuper::createBackupTable()
 
 	Entities<Base>::ENTITYS_MAP::const_iterator iter = Baseapp::getSingleton().pEntities()->getEntities().begin();
 
-	for(; iter != Baseapp::getSingleton().pEntities()->getEntities().end(); iter++)
+	for(; iter != Baseapp::getSingleton().pEntities()->getEntities().end(); ++iter)
 	{
 		Base* pBase = static_cast<Base*>(iter->second.get());
 

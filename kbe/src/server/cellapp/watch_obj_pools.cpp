@@ -34,9 +34,9 @@ int32 watchWitnessPool_max()
 	return (int)Witness::ObjPool().max();
 }
 
-int32 watchWitnessPool_totalAlloc()
+int32 watchWitnessPool_totalAllocs()
 {
-	return (int)Witness::ObjPool().totalAlloc();
+	return (int)Witness::ObjPool().totalAllocs();
 }
 
 bool watchWitnessPool_isDestroyed()
@@ -49,7 +49,7 @@ uint32 watchWitnessPool_bytes()
 	size_t bytes = 0;
 
 	ObjectPool<Witness>::OBJECTS::const_iterator iter = Witness::ObjPool().objects().begin();
-	for(; iter != Witness::ObjPool().objects().end(); iter++)
+	for(; iter != Witness::ObjPool().objects().end(); ++iter)
 	{
 		bytes += static_cast<PoolObject*>((*iter))->getPoolObjectBytes();
 	}
@@ -64,7 +64,7 @@ bool WatchObjectPool::initWatchPools()
 	WATCH_OBJECT("objectPools/Witness/max", &watchWitnessPool_max);
 	WATCH_OBJECT("objectPools/Witness/isDestroyed", &watchWitnessPool_isDestroyed);
 	WATCH_OBJECT("objectPools/Witness/memory", &watchWitnessPool_bytes);
-	WATCH_OBJECT("objectPools/Witness/totalAllocs", &watchWitnessPool_totalAlloc);
+	WATCH_OBJECT("objectPools/Witness/totalAllocs", &watchWitnessPool_totalAllocs);
 	return true;
 }
 

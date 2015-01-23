@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBENGINE_SCRIPT_HPP
-#define KBENGINE_SCRIPT_HPP
+#ifndef KBENGINE_SCRIPT_H
+#define KBENGINE_SCRIPT_H
 
 #include "helper/debug_helper.h"
 #include "common/common.h"
@@ -57,7 +57,7 @@ PyObject * PyTuple_FromIntVector(const std::vector< T > & v)
 {
 	int sz = v.size();
 	PyObject * t = PyTuple_New( sz );
-	for (int i = 0; i < sz; i++)
+	for (int i = 0; i < sz; ++i)
 	{
 		PyTuple_SetItem( t, i, PyLong_FromLong( v[i] ) );
 	}
@@ -69,7 +69,7 @@ inline PyObject * PyTuple_FromIntVector<int64>(const std::vector< int64 > & v)
 {
 	int sz = v.size();
 	PyObject * t = PyTuple_New( sz );
-	for (int i = 0; i < sz; i++)
+	for (int i = 0; i < sz; ++i)
 	{
 		PyTuple_SetItem( t, i, PyLong_FromLongLong( v[i] ) );
 	}
@@ -81,7 +81,7 @@ inline PyObject * PyTuple_FromIntVector<uint64>(const std::vector< uint64 > & v)
 {
 	int sz = v.size();
 	PyObject * t = PyTuple_New( sz );
-	for (int i = 0; i < sz; i++)
+	for (int i = 0; i < sz; ++i)
 	{
 		PyTuple_SetItem( t, i, PyLong_FromUnsignedLongLong( v[i] ) );
 	}
@@ -130,32 +130,10 @@ public:
 	int registerToModule(const char* attrName, PyObject* pyObj);
 	int unregisterToModule(const char* attrName);
 
-	void initThread( bool plusOwnInterpreter = false );
-	void finiThread( bool plusOwnInterpreter = false );
-
-	static PyThreadState* createInterpreter();
-	static void destroyInterpreter( PyThreadState* pInterpreter );
-	static PyThreadState* swapInterpreter( PyThreadState* pInterpreter );
-
-	class AutoInterpreterSwapper
-	{
-		PyThreadState*	pSwappedOutInterpreter_;
-	public:
-		explicit AutoInterpreterSwapper( PyThreadState* pNewInterpreter ) :
-		pSwappedOutInterpreter_( Script::swapInterpreter( pNewInterpreter ) )
-		{}
-		~AutoInterpreterSwapper()
-		{
-			Script::swapInterpreter( pSwappedOutInterpreter_ );
-		}
-	};
-
-	static void acquireLock();
-	static void releaseLock();
-
 	INLINE ScriptStdOutErr* pyStdouterr()const;
 
 	INLINE void pyPrint(const std::string& str);
+
 protected:
 	PyObject* 					module_;
 	PyObject*					extraModule_;		// À©Õ¹½Å±¾Ä£¿é
@@ -170,4 +148,4 @@ protected:
 #include "script.inl"
 #endif
 
-#endif // KBENGINE_SCRIPT_HPP
+#endif // KBENGINE_SCRIPT_H

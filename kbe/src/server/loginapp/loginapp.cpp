@@ -107,7 +107,7 @@ void Loginapp::onChannelDeregister(Network::Channel * pChannel)
 	{
 		const std::string& extra = pChannel->extra();
 
-		// 通知billing从队列中清除他的请求， 避免拥塞
+		// 通知Interfaces从队列中清除他的请求， 避免拥塞
 		if(extra.size() > 0)
 		{
 			Components::COMPONENTS& cts = Components::getSingleton().getComponents(DBMGR_TYPE);
@@ -121,10 +121,10 @@ void Loginapp::onChannelDeregister(Network::Channel * pChannel)
 			}
 			else
 			{
-				Network::Bundle bundle;
-				bundle.newMessage(DbmgrInterface::eraseClientReq);
-				bundle << extra;
-				bundle.send(this->networkInterface(), dbmgrinfos->pChannel);
+				Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+				(*pBundle).newMessage(DbmgrInterface::eraseClientReq);
+				(*pBundle) << extra;
+				dbmgrinfos->pChannel->send(pBundle);
 			}
 		}
 	}
@@ -148,7 +148,7 @@ bool Loginapp::inInitialize()
 bool Loginapp::initializeEnd()
 {
 	// 添加一个timer， 每秒检查一些状态
-	loopCheckTimerHandle_ = this->mainDispatcher().addTimer(1000000 / 50, this,
+	loopCheckTimerHandle_ = this->dispatcher().addTimer(1000000 / 50, this,
 							reinterpret_cast<void *>(TIMEOUT_CHECK_STATUS));
 
 	return true;
@@ -200,12 +200,12 @@ bool Loginapp::_createAccount(Network::Channel* pChannel, std::string& accountNa
 		WARNING_MSG(fmt::format("Loginapp::_createAccount({}): not available!\n", accountName));
 
 		std::string retdatas = "";
-		Network::Bundle bundle;
-		bundle.newMessage(ClientInterface::onCreateAccountResult);
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+		(*pBundle).newMessage(ClientInterface::onCreateAccountResult);
 		SERVER_ERROR_CODE retcode = SERVER_ERR_ACCOUNT_REGISTER_NOT_AVAILABLE;
-		bundle << retcode;
-		bundle.appendBlob(retdatas);
-		bundle.send(this->networkInterface(), pChannel);
+		(*pBundle) << retcode;
+		(*pBundle).appendBlob(retdatas);
+		pChannel->send(pBundle);
 		return false;
 	}
 
@@ -237,16 +237,16 @@ bool Loginapp::_createAccount(Network::Channel* pChannel, std::string& accountNa
 	}
 	
 	std::string retdatas = "";
-	if(shuttingdown_)
+	if(shuttingdown_ != SHUTDOWN_STATE_STOP)
 	{
 		WARNING_MSG(fmt::format("Loginapp::_createAccount: shutting down, create {} failed!\n", accountName));
 
-		Network::Bundle bundle;
-		bundle.newMessage(ClientInterface::onCreateAccountResult);
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+		(*pBundle).newMessage(ClientInterface::onCreateAccountResult);
 		SERVER_ERROR_CODE retcode = SERVER_ERR_IN_SHUTTINGDOWN;
-		bundle << retcode;
-		bundle.appendBlob(retdatas);
-		bundle.send(this->networkInterface(), pChannel);
+		(*pBundle) << retcode;
+		(*pBundle).appendBlob(retdatas);
+		pChannel->send(pBundle);
 		return false;
 	}
 
@@ -256,12 +256,12 @@ bool Loginapp::_createAccount(Network::Channel* pChannel, std::string& accountNa
 		WARNING_MSG(fmt::format("Loginapp::_createAccount: pendingCreateMgr has {}, request create failed!\n", 
 			accountName));
 
-		Network::Bundle bundle;
-		bundle.newMessage(ClientInterface::onCreateAccountResult);
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+		(*pBundle).newMessage(ClientInterface::onCreateAccountResult);
 		SERVER_ERROR_CODE retcode = SERVER_ERR_BUSY;
-		bundle << retcode;
-		bundle.appendBlob(retdatas);
-		bundle.send(this->networkInterface(), pChannel);
+		(*pBundle) << retcode;
+		(*pBundle).appendBlob(retdatas);
+		pChannel->send(pBundle);
 		return false;
 	}
 	
@@ -278,12 +278,12 @@ bool Loginapp::_createAccount(Network::Channel* pChannel, std::string& accountNa
 				ERROR_MSG(fmt::format("Loginapp::_createAccount: invalid accountName({})\n",
 					accountName));
 
-				Network::Bundle bundle;
-				bundle.newMessage(ClientInterface::onCreateAccountResult);
+				Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+				(*pBundle).newMessage(ClientInterface::onCreateAccountResult);
 				SERVER_ERROR_CODE retcode = SERVER_ERR_NAME;
-				bundle << retcode;
-				bundle.appendBlob(retdatas);
-				bundle.send(this->networkInterface(), pChannel);
+				(*pBundle) << retcode;
+				(*pBundle).appendBlob(retdatas);
+				pChannel->send(pBundle);
 				return false;
 			}
 
@@ -297,12 +297,12 @@ bool Loginapp::_createAccount(Network::Channel* pChannel, std::string& accountNa
 			ERROR_MSG(fmt::format("Loginapp::_createAccount: invalid accountName({})\n",
 				accountName));
 
-			Network::Bundle bundle;
-			bundle.newMessage(ClientInterface::onCreateAccountResult);
+			Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+			(*pBundle).newMessage(ClientInterface::onCreateAccountResult);
 			SERVER_ERROR_CODE retcode = SERVER_ERR_NAME;
-			bundle << retcode;
-			bundle.appendBlob(retdatas);
-			bundle.send(this->networkInterface(), pChannel);
+			(*pBundle) << retcode;
+			(*pBundle).appendBlob(retdatas);
+			pChannel->send(pBundle);
 			return false;
 		}
 	}
@@ -316,12 +316,12 @@ bool Loginapp::_createAccount(Network::Channel* pChannel, std::string& accountNa
 		WARNING_MSG(fmt::format("Loginapp::_createAccount: invalid mail={}\n", 
 			accountName));
 
-		Network::Bundle bundle;
-		bundle.newMessage(ClientInterface::onCreateAccountResult);
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+		(*pBundle).newMessage(ClientInterface::onCreateAccountResult);
 		SERVER_ERROR_CODE retcode = SERVER_ERR_NAME_MAIL;
-		bundle << retcode;
-		bundle.appendBlob(retdatas);
-		bundle.send(this->networkInterface(), pChannel);
+		(*pBundle) << retcode;
+		(*pBundle).appendBlob(retdatas);
+		pChannel->send(pBundle);
 		return false;
     }
 
@@ -346,23 +346,23 @@ bool Loginapp::_createAccount(Network::Channel* pChannel, std::string& accountNa
 		ERROR_MSG(fmt::format("Loginapp::_createAccount: create({}), not found dbmgr!\n", 
 			accountName));
 
-		Network::Bundle bundle;
-		bundle.newMessage(ClientInterface::onCreateAccountResult);
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+		(*pBundle).newMessage(ClientInterface::onCreateAccountResult);
 		SERVER_ERROR_CODE retcode = SERVER_ERR_SRV_NO_READY;
-		bundle << retcode;
-		bundle.appendBlob(retdatas);
-		bundle.send(this->networkInterface(), pChannel);
+		(*pBundle) << retcode;
+		(*pBundle).appendBlob(retdatas);
+		pChannel->send(pBundle);
 		return false;
 	}
 
 	pChannel->extra(accountName);
 
-	Network::Bundle bundle;
-	bundle.newMessage(DbmgrInterface::reqCreateAccount);
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+	(*pBundle).newMessage(DbmgrInterface::reqCreateAccount);
 	uint8 uatype = uint8(type);
-	bundle << accountName << password << uatype;
-	bundle.appendBlob(datas);
-	bundle.send(this->networkInterface(), dbmgrinfos->pChannel);
+	(*pBundle) << accountName << password << uatype;
+	(*pBundle).appendBlob(datas);
+	dbmgrinfos->pChannel->send(pBundle);
 	return true;
 }
 
@@ -417,13 +417,12 @@ void Loginapp::onReqCreateAccountResult(Network::Channel* pChannel, MemoryStream
 
 	pClientChannel->extra("");
 
-	Network::Bundle bundle;
-	bundle.newMessage(ClientInterface::onCreateAccountResult);
-	bundle << failedcode;
-	bundle.appendBlob(retdatas);
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+	(*pBundle).newMessage(ClientInterface::onCreateAccountResult);
+	(*pBundle) << failedcode;
+	(*pBundle).appendBlob(retdatas);
 
-	bundle.send(this->networkInterface(), pClientChannel);
-
+	pClientChannel->send(pBundle);
 	SAFE_RELEASE(ptinfos);
 }
 
@@ -456,7 +455,7 @@ void Loginapp::onReqCreateMailAccountResult(Network::Channel* pChannel, MemorySt
 		else
 		{
 			Components::COMPONENTS::iterator iter = loginapps.begin();
-			for(; iter != loginapps.end(); iter++)
+			for(; iter != loginapps.end(); ++iter)
 			{
 				if((*iter).groupOrderid == 1)
 				{
@@ -484,12 +483,12 @@ void Loginapp::onReqCreateMailAccountResult(Network::Channel* pChannel, MemorySt
 	pClientChannel->extra("");
 	retdatas = "";
 
-	Network::Bundle bundle;
-	bundle.newMessage(ClientInterface::onCreateAccountResult);
-	bundle << failedcode;
-	bundle.appendBlob(retdatas);
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+	(*pBundle).newMessage(ClientInterface::onCreateAccountResult);
+	(*pBundle) << failedcode;
+	(*pBundle).appendBlob(retdatas);
 
-	bundle.send(this->networkInterface(), pClientChannel);
+	pClientChannel->send(pBundle);
 
 	SAFE_RELEASE(ptinfos);
 }
@@ -553,27 +552,27 @@ void Loginapp::reqAccountResetPassword(Network::Channel* pChannel, std::string& 
 		ERROR_MSG(fmt::format("Loginapp::_createAccount: create({}), not found dbmgr!\n", 
 			accountName));
 
-		Network::Bundle bundle;
-		bundle.newMessage(ClientInterface::onReqAccountResetPasswordCB);
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+		(*pBundle).newMessage(ClientInterface::onReqAccountResetPasswordCB);
 		SERVER_ERROR_CODE retcode = SERVER_ERR_SRV_NO_READY;
-		bundle << retcode;
-		bundle.send(this->networkInterface(), pChannel);
+		(*pBundle) << retcode;
+		pChannel->send(pBundle);
 		return;
 	}
 
 	{
-		Network::Bundle bundle;
-		bundle.newMessage(DbmgrInterface::accountReqResetPassword);
-		bundle << accountName;
-		bundle.send(this->networkInterface(), dbmgrinfos->pChannel);
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+		(*pBundle).newMessage(DbmgrInterface::accountReqResetPassword);
+		(*pBundle) << accountName;
+		dbmgrinfos->pChannel->send(pBundle);
 	}
 
 	{
-		Network::Bundle bundle;
-		bundle.newMessage(ClientInterface::onReqAccountResetPasswordCB);
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+		(*pBundle).newMessage(ClientInterface::onReqAccountResetPasswordCB);
 		SERVER_ERROR_CODE retcode = SERVER_SUCCESS;
-		bundle << retcode;
-		bundle.send(this->networkInterface(), pChannel);
+		(*pBundle) << retcode;
+		pChannel->send(pBundle);
 	}
 }
 
@@ -599,7 +598,7 @@ void Loginapp::onReqAccountResetPasswordCB(Network::Channel* pChannel, std::stri
 		else
 		{
 			Components::COMPONENTS::iterator iter = loginapps.begin();
-			for(; iter != loginapps.end(); iter++)
+			for(; iter != loginapps.end(); ++iter)
 			{
 				if((*iter).groupOrderid == 1)
 				{
@@ -646,6 +645,7 @@ void Loginapp::login(Network::Channel* pChannel, MemoryStream& s)
 	{
 		INFO_MSG("Loginapp::login: loginName is NULL.\n");
 		_loginFailed(pChannel, loginName, SERVER_ERR_NAME, datas, true);
+		s.done();
 		return;
 	}
 
@@ -654,7 +654,8 @@ void Loginapp::login(Network::Channel* pChannel, MemoryStream& s)
 		INFO_MSG(fmt::format("Loginapp::login: loginName is too long, size={}, limit={}.\n",
 			loginName.size(), ACCOUNT_NAME_MAX_LENGTH));
 		
-		_loginFailed(pChannel, loginName, SERVER_ERR_NAME, datas);
+		_loginFailed(pChannel, loginName, SERVER_ERR_NAME, datas, true);
+		s.done();
 		return;
 	}
 
@@ -663,7 +664,8 @@ void Loginapp::login(Network::Channel* pChannel, MemoryStream& s)
 		INFO_MSG(fmt::format("Loginapp::login: password is too long, size={}, limit={}.\n",
 			password.size(), ACCOUNT_PASSWD_MAX_LENGTH));
 		
-		_loginFailed(pChannel, loginName, SERVER_ERR_PASSWORD, datas);
+		_loginFailed(pChannel, loginName, SERVER_ERR_PASSWORD, datas, true);
+		s.done();
 		return;
 	}
 	
@@ -672,11 +674,32 @@ void Loginapp::login(Network::Channel* pChannel, MemoryStream& s)
 		INFO_MSG(fmt::format("Loginapp::login: bindatas is too long, size={}, limit={}.\n",
 			datas.size(), ACCOUNT_DATA_MAX_LENGTH));
 		
-		_loginFailed(pChannel, loginName, SERVER_ERR_OP_FAILED, datas);
+		_loginFailed(pChannel, loginName, SERVER_ERR_OP_FAILED, datas, true);
+		s.done();
 		return;
 	}
 
-	if(!g_kbeSrvConfig.getDBMgr().allowEmptyDigest && (ctype != CLIENT_TYPE_BROWSER && ctype != CLIENT_TYPE_MINI))
+	// 首先必须baseappmgr和dbmgr都已经准备完毕了。
+	Components::ComponentInfos* baseappmgrinfos = Components::getSingleton().getBaseappmgr();
+	if(baseappmgrinfos == NULL || baseappmgrinfos->pChannel == NULL || baseappmgrinfos->cid == 0)
+	{
+		datas = "";
+		_loginFailed(pChannel, loginName, SERVER_ERR_SRV_NO_READY, datas, true);
+		s.done();
+		return;
+	}
+
+	Components::ComponentInfos* dbmgrinfos = Components::getSingleton().getDbmgr();
+	if(dbmgrinfos == NULL || dbmgrinfos->pChannel == NULL || dbmgrinfos->cid == 0)
+	{
+		datas = "";
+		_loginFailed(pChannel, loginName, SERVER_ERR_SRV_NO_READY, datas, true);
+		s.done();
+		return;
+	}
+
+	if(!g_kbeSrvConfig.getDBMgr().allowEmptyDigest && (ctype != CLIENT_TYPE_BROWSER && 
+		ctype != CLIENT_TYPE_MINI && ctype != CLIENT_TYPE_MOBILE))
 	{
 		std::string clientDigest;
 
@@ -700,7 +723,7 @@ void Loginapp::login(Network::Channel* pChannel, MemoryStream& s)
 	if(ptinfos != NULL)
 	{
 		datas = "";
-		_loginFailed(pChannel, loginName, SERVER_ERR_BUSY, datas);
+		_loginFailed(pChannel, loginName, SERVER_ERR_BUSY, datas, true);
 		return;
 	}
 
@@ -715,7 +738,7 @@ void Loginapp::login(Network::Channel* pChannel, MemoryStream& s)
 	if(ctype < UNKNOWN_CLIENT_COMPONENT_TYPE || ctype >= CLIENT_TYPE_END)
 		ctype = UNKNOWN_CLIENT_COMPONENT_TYPE;
 
-	if(shuttingdown_)
+	if(shuttingdown_ != SHUTDOWN_STATE_STOP)
 	{
 		INFO_MSG(fmt::format("Loginapp::login: shutting down, {} login failed!\n", loginName));
 
@@ -734,40 +757,14 @@ void Loginapp::login(Network::Channel* pChannel, MemoryStream& s)
 	INFO_MSG(fmt::format("Loginapp::login: new client[{0}], loginName={1}, datas={2}.\n",
 		COMPONENT_CLIENT_NAME[ctype], loginName, datas));
 
-	// 首先必须baseappmgr和dbmgr都已经准备完毕了。
-	Components::COMPONENTS& cts = Components::getSingleton().getComponents(BASEAPPMGR_TYPE);
-	Components::ComponentInfos* baseappmgrinfos = NULL;
-	if(cts.size() > 0)
-		baseappmgrinfos = &(*cts.begin());
-
-	if(baseappmgrinfos == NULL || baseappmgrinfos->pChannel == NULL || baseappmgrinfos->cid == 0)
-	{
-		datas = "";
-		_loginFailed(pChannel, loginName, SERVER_ERR_SRV_NO_READY, datas);
-		return;
-	}
-
-	Components::COMPONENTS& cts1 = Components::getSingleton().getComponents(DBMGR_TYPE);
-	Components::ComponentInfos* dbmgrinfos = NULL;
-
-	if(cts1.size() > 0)
-		dbmgrinfos = &(*cts1.begin());
-
-	if(dbmgrinfos == NULL || dbmgrinfos->pChannel == NULL || dbmgrinfos->cid == 0)
-	{
-		datas = "";
-		_loginFailed(pChannel, loginName, SERVER_ERR_SRV_NO_READY, datas);
-		return;
-	}
-
 	pChannel->extra(loginName);
 
 	// 向dbmgr查询用户合法性
-	Network::Bundle bundle;
-	bundle.newMessage(DbmgrInterface::onAccountLogin);
-	bundle << loginName << password;
-	bundle.appendBlob(datas);
-	bundle.send(this->networkInterface(), dbmgrinfos->pChannel);
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+	(*pBundle).newMessage(DbmgrInterface::onAccountLogin);
+	(*pBundle) << loginName << password;
+	(*pBundle).appendBlob(datas);
+	dbmgrinfos->pChannel->send(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
@@ -776,24 +773,41 @@ void Loginapp::_loginFailed(Network::Channel* pChannel, std::string& loginName, 
 	INFO_MSG(fmt::format("Loginapp::loginFailed: loginName={0} login is failed. failedcode={1}, datas={2}.\n",
 		loginName, SERVER_ERR_STR[failedcode], datas));
 	
-	PendingLoginMgr::PLInfos* infos = pendingLoginMgr_.remove(loginName);
-	if(infos == NULL && !force)
-		return;
+	PendingLoginMgr::PLInfos* infos = NULL;
 
-	Network::Bundle bundle;
-	bundle.newMessage(ClientInterface::onLoginFailed);
-	bundle << failedcode;
-	bundle.appendBlob(datas);
+	if(!force)
+	{
+		infos = pendingLoginMgr_.remove(loginName);
+		if(infos == NULL)
+			return;
+	}
+
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+	(*pBundle).newMessage(ClientInterface::onLoginFailed);
+	(*pBundle) << failedcode;
+	(*pBundle).appendBlob(datas);
 
 	if(pChannel)
 	{
-		bundle.send(this->networkInterface(), pChannel);
+		pChannel->send(pBundle);
 	}
 	else 
 	{
-		Network::Channel* pClientChannel = this->networkInterface().findChannel(infos->addr);
-		if(pClientChannel)
-			bundle.send(this->networkInterface(), pClientChannel);
+		if(infos)
+		{
+			Network::Channel* pClientChannel = this->networkInterface().findChannel(infos->addr);
+			if(pClientChannel)
+				pClientChannel->send(pBundle);
+			else
+				Network::Bundle::ObjPool().reclaimObject(pBundle);
+		}
+		else
+		{
+			ERROR_MSG(fmt::format("Loginapp::_loginFailed: infos({}) is NULL!\n", 
+				loginName));
+
+			Network::Bundle::ObjPool().reclaimObject(pBundle);
+		}
 	}
 
 	SAFE_RELEASE(infos);
@@ -887,26 +901,26 @@ void Loginapp::onLoginAccountQueryResultFromDbmgr(Network::Channel* pChannel, Me
 	// 如果大于0则说明当前账号仍然存活于某个baseapp上
 	if(componentID > 0)
 	{
-		Network::Bundle bundle;
-		bundle.newMessage(BaseappmgrInterface::registerPendingAccountToBaseappAddr);
-		bundle << componentID << loginName << accountName << password << entityID << dbid << flags << deadline << infos->ctype;
-		bundle.send(this->networkInterface(), baseappmgrinfos->pChannel);
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+		(*pBundle).newMessage(BaseappmgrInterface::registerPendingAccountToBaseappAddr);
+		(*pBundle) << componentID << loginName << accountName << password << entityID << dbid << flags << deadline << infos->ctype;
+		baseappmgrinfos->pChannel->send(pBundle);
 		return;
 	}
 	else
 	{
 		// 注册到baseapp并且获取baseapp的地址
-		Network::Bundle bundle;
-		bundle.newMessage(BaseappmgrInterface::registerPendingAccountToBaseapp);
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+		(*pBundle).newMessage(BaseappmgrInterface::registerPendingAccountToBaseapp);
 
-		bundle << loginName;
-		bundle << accountName;
-		bundle << password;
-		bundle << dbid;
-		bundle << flags;
-		bundle << deadline;
-		bundle << infos->ctype;
-		bundle.send(this->networkInterface(), baseappmgrinfos->pChannel);
+		(*pBundle) << loginName;
+		(*pBundle) << accountName;
+		(*pBundle) << password;
+		(*pBundle) << dbid;
+		(*pBundle) << flags;
+		(*pBundle) << deadline;
+		(*pBundle) << infos->ctype;
+		baseappmgrinfos->pChannel->send(pBundle);
 	}
 }
 
@@ -945,14 +959,14 @@ void Loginapp::onLoginAccountQueryBaseappAddrFromBaseappmgr(Network::Channel* pC
 		return;
 	}
 
-	Network::Bundle bundle;
-	bundle.newMessage(ClientInterface::onLoginSuccessfully);
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+	(*pBundle).newMessage(ClientInterface::onLoginSuccessfully);
 	uint16 fport = ntohs(port);
-	bundle << accountName;
-	bundle << addr;
-	bundle << fport;
-	bundle.appendBlob(infos->datas);
-	bundle.send(this->networkInterface(), pClientChannel);
+	(*pBundle) << accountName;
+	(*pBundle) << addr;
+	(*pBundle) << fport;
+	(*pBundle).appendBlob(infos->datas);
+	pClientChannel->send(pBundle);
 
 	SAFE_RELEASE(infos);
 }
@@ -971,9 +985,7 @@ void Loginapp::onHello(Network::Channel* pChannel,
 	(*pBundle) << Network::MessageHandlers::getDigestStr();
 	(*pBundle) << digest_;
 	(*pBundle) << g_componentType;
-	(*pBundle).send(networkInterface(), pChannel);
-
-	Network::Bundle::ObjPool().reclaimObject(pBundle);
+	pChannel->send(pBundle);
 
 	if(Network::g_channelExternalEncryptType > 0)
 	{
@@ -997,9 +1009,7 @@ void Loginapp::onVersionNotMatch(Network::Channel* pChannel)
 	
 	pBundle->newMessage(ClientInterface::onVersionNotMatch);
 	(*pBundle) << KBEVersion::versionString();
-	(*pBundle).send(networkInterface(), pChannel);
-
-	Network::Bundle::ObjPool().reclaimObject(pBundle);
+	pChannel->send(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
@@ -1009,9 +1019,7 @@ void Loginapp::onScriptVersionNotMatch(Network::Channel* pChannel)
 	
 	pBundle->newMessage(ClientInterface::onScriptVersionNotMatch);
 	(*pBundle) << KBEVersion::scriptVersionString();
-	(*pBundle).send(networkInterface(), pChannel);
-
-	Network::Bundle::ObjPool().reclaimObject(pBundle);
+	pChannel->send(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
@@ -1019,13 +1027,13 @@ void Loginapp::importClientMessages(Network::Channel* pChannel)
 {
 	static Network::Bundle bundle;
 	
-	if(bundle.packets().size() == 0)
+	if(bundle.empty())
 	{
 		std::map< Network::MessageID, Network::ExposedMessageInfo > clientMessages;
 		{
 			const Network::MessageHandlers::MessageHandlerMap& msgHandlers = ClientInterface::messageHandlers.msgHandlers();
 			Network::MessageHandlers::MessageHandlerMap::const_iterator iter = msgHandlers.begin();
-			for(; iter != msgHandlers.end(); iter++)
+			for(; iter != msgHandlers.end(); ++iter)
 			{
 				Network::MessageHandler* pMessageHandler = iter->second;
 
@@ -1037,7 +1045,7 @@ void Loginapp::importClientMessages(Network::Channel* pChannel)
 
 				KBEngine::strutil::kbe_replace(info.name, "::", "_");
 				std::vector<std::string>::iterator iter1 = pMessageHandler->pArgs->strArgsTypes.begin();
-				for(; iter1 !=  pMessageHandler->pArgs->strArgsTypes.end(); iter1++)
+				for(; iter1 !=  pMessageHandler->pArgs->strArgsTypes.end(); ++iter1)
 				{
 					info.argsTypes.push_back((uint8)datatype2id((*iter1)));
 				}
@@ -1048,7 +1056,7 @@ void Loginapp::importClientMessages(Network::Channel* pChannel)
 		{
 			const Network::MessageHandlers::MessageHandlerMap& msgHandlers = LoginappInterface::messageHandlers.msgHandlers();
 			Network::MessageHandlers::MessageHandlerMap::const_iterator iter = msgHandlers.begin();
-			for(; iter != msgHandlers.end(); iter++)
+			for(; iter != msgHandlers.end(); ++iter)
 			{
 				Network::MessageHandler* pMessageHandler = iter->second;
 				if(!iter->second->exposed)
@@ -1061,7 +1069,7 @@ void Loginapp::importClientMessages(Network::Channel* pChannel)
 				
 				KBEngine::strutil::kbe_replace(info.name, "::", "_");
 				std::vector<std::string>::iterator iter1 = pMessageHandler->pArgs->strArgsTypes.begin();
-				for(; iter1 !=  pMessageHandler->pArgs->strArgsTypes.end(); iter1++)
+				for(; iter1 !=  pMessageHandler->pArgs->strArgsTypes.end(); ++iter1)
 				{
 					info.argsTypes.push_back((uint8)datatype2id((*iter1)));
 				}
@@ -1074,33 +1082,33 @@ void Loginapp::importClientMessages(Network::Channel* pChannel)
 		bundle << size;
 
 		std::map< Network::MessageID, Network::ExposedMessageInfo >::iterator iter = clientMessages.begin();
-		for(; iter != clientMessages.end(); iter++)
+		for(; iter != clientMessages.end(); ++iter)
 		{
 			uint8 argsize = iter->second.argsTypes.size();
 			bundle << iter->second.id << iter->second.msgLen << iter->second.name << iter->second.argsType << argsize;
 
 			std::vector<uint8>::iterator argiter = iter->second.argsTypes.begin();
-			for(; argiter != iter->second.argsTypes.end(); argiter++)
+			for(; argiter != iter->second.argsTypes.end(); ++argiter)
 			{
 				bundle << (*argiter);
 			}
 		}
 
 		iter = messages.begin();
-		for(; iter != messages.end(); iter++)
+		for(; iter != messages.end(); ++iter)
 		{
 			uint8 argsize = iter->second.argsTypes.size();
 			bundle << iter->second.id << iter->second.msgLen << iter->second.name << iter->second.argsType << argsize;
 
 			std::vector<uint8>::iterator argiter = iter->second.argsTypes.begin();
-			for(; argiter != iter->second.argsTypes.end(); argiter++)
+			for(; argiter != iter->second.argsTypes.end(); ++argiter)
 			{
 				bundle << (*argiter);
 			}
 		}
 	}
 
-	bundle.resend(networkInterface(), pChannel);
+	pChannel->send(new Network::Bundle(bundle));
 }
 
 //-------------------------------------------------------------------------------------
@@ -1108,23 +1116,28 @@ void Loginapp::importServerErrorsDescr(Network::Channel* pChannel)
 {
 	static Network::Bundle bundle;
 	
-	if(bundle.packets().size() == 0)
+	if(bundle.empty())
 	{
 		std::map<uint16, std::pair< std::string, std::string> > errsDescrs;
 
 		TiXmlNode *rootNode = NULL;
-		XmlPlus* xml = new XmlPlus(Resmgr::getSingleton().matchRes("server/server_errors.xml").c_str());
+		SmartPointer<XML> xml(new XML(Resmgr::getSingleton().matchRes("server/server_errors.xml").c_str()));
 
 		if(!xml->isGood())
 		{
 			ERROR_MSG(fmt::format("ServerConfig::loadConfig: load {} is failed!\n",
 				"server/server_errors.xml"));
 
-			SAFE_RELEASE(xml);
 			return;
 		}
 
 		rootNode = xml->getRootNode();
+		if(rootNode == NULL)
+		{
+			// root节点下没有子节点了
+			return;
+		}
+
 		XML_FOR_BEGIN(rootNode)
 		{
 			TiXmlNode* node = xml->enterNode(rootNode->FirstChild(), "id");
@@ -1133,14 +1146,12 @@ void Loginapp::importServerErrorsDescr(Network::Channel* pChannel)
 		}
 		XML_FOR_END(rootNode);
 
-		SAFE_RELEASE(xml);
-
 		bundle.newMessage(ClientInterface::onImportServerErrorsDescr);
 		std::map<uint16, std::pair< std::string, std::string> >::iterator iter = errsDescrs.begin();
 		uint16 size = errsDescrs.size();
 
 		bundle << size;
-		for(; iter != errsDescrs.end(); iter++)
+		for(; iter != errsDescrs.end(); ++iter)
 		{
 			bundle << iter->first;
 			bundle.appendBlob(iter->second.first.data(), iter->second.first.size());
@@ -1148,7 +1159,7 @@ void Loginapp::importServerErrorsDescr(Network::Channel* pChannel)
 		}
 	}
 
-	bundle.resend(networkInterface(), pChannel);
+	pChannel->send(new Network::Bundle(bundle));
 }
 
 //-------------------------------------------------------------------------------------

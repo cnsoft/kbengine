@@ -21,14 +21,14 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 /*
 	资源管理器。
 */
-#ifndef KBE_RESMGR_HPP
-#define KBE_RESMGR_HPP
+#ifndef KBE_RESMGR_H
+#define KBE_RESMGR_H
 
 #include "resourceobject.h"
 #include "common/common.h"
 #include "common/singleton.h"
 #include "common/timer.h"
-#include "xmlplus/xmlplus.h"	
+#include "xml/xml.h"	
 #include "common/smartpointer.h"
 	
 namespace KBEngine{
@@ -103,13 +103,13 @@ public:
 
 	/**
 		获得用户级资源目录
-		demo\\res\\*
+		assets\\res\\*
 	*/
 	std::string getPyUserResPath();
 
 	/**
 		获得用户级脚本目录
-		demo\\scripts\\*
+		assets\\scripts\\*
 	*/
 	std::string getPyUserScriptsPath();
 
@@ -134,4 +134,4 @@ private:
 
 }
 
-#endif // KBE_RESMGR_HPP
+#endif // KBE_RESMGR_H

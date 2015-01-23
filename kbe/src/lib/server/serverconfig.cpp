@@ -38,14 +38,14 @@ ServerConfig::ServerConfig():
 gameUpdateHertz_(10),
 tick_max_buffered_logs_(4096),
 tick_max_sync_logs_(32),
-billingSystemAddr_(),
-billingSystem_accountType_(""),
-billingSystem_chargeType_(""),
-billingSystem_thirdpartyAccountServiceAddr_(""),
-billingSystem_thirdpartyAccountServicePort_(80),
-billingSystem_thirdpartyChargeServiceAddr_(""),
-billingSystem_thirdpartyChargeServicePort_(80),
-billingSystem_thirdpartyServiceCBPort_(0),
+interfacesAddr_(),
+interfaces_accountType_(""),
+interfaces_chargeType_(""),
+interfaces_thirdpartyAccountServiceAddr_(""),
+interfaces_thirdpartyAccountServicePort_(80),
+interfaces_thirdpartyChargeServiceAddr_(""),
+interfaces_thirdpartyChargeServicePort_(80),
+interfaces_thirdpartyServiceCBPort_(0),
 shutdown_time_(1.f),
 shutdown_waitTickTime_(1.f),
 callback_timeout_(180.f),
@@ -65,17 +65,22 @@ ServerConfig::~ServerConfig()
 bool ServerConfig::loadConfig(std::string fileName)
 {
 	TiXmlNode* node = NULL, *rootNode = NULL;
-	XmlPlus* xml = new XmlPlus(Resmgr::getSingleton().matchRes(fileName).c_str());
+	SmartPointer<XML> xml(new XML(Resmgr::getSingleton().matchRes(fileName).c_str()));
 
 	if(!xml->isGood())
 	{
 		ERROR_MSG(fmt::format("ServerConfig::loadConfig: load {} is failed!\n",
 			fileName.c_str()));
 
-		SAFE_RELEASE(xml);
 		return false;
 	}
 	
+	if(xml->getRootNode() == NULL)
+	{
+		// root节点下没有子节点了
+		return true;
+	}
+
 	std::string email_service_config;
 	rootNode = xml->getRootNode("email_service_config");
 	if(rootNode != NULL)
@@ -271,35 +276,71 @@ bool ServerConfig::loadConfig(std::string fileName)
 				channelCommon_.extWriteBufferSize = KBE_MAX(0, xml->getValInt(childnode1));
 		}
 
-		childnode = xml->enterNode(rootNode, "receiveWindowOverflow");
+		childnode = xml->enterNode(rootNode, "windowOverflow");
 		if(childnode)
 		{
-			TiXmlNode* childnode1 = xml->enterNode(childnode, "messages");
-			if(childnode1)
+			TiXmlNode* sendNode = xml->enterNode(childnode, "send");
+			if(sendNode)
 			{
-				TiXmlNode* childnode2 = xml->enterNode(childnode1, "internal");
-				if(childnode2)
-					Network::g_intReceiveWindowMessagesOverflow = KBE_MAX(0, xml->getValInt(childnode2));
+				TiXmlNode* childnode1 = xml->enterNode(sendNode, "messages");
+				if(childnode1)
+				{
+					TiXmlNode* childnode2 = xml->enterNode(childnode1, "internal");
+					if(childnode2)
+						Network::g_intSendWindowMessagesOverflow = KBE_MAX(0, xml->getValInt(childnode2));
 
-				childnode2 = xml->enterNode(childnode1, "external");
-				if(childnode2)
-					Network::g_extReceiveWindowMessagesOverflow = KBE_MAX(0, xml->getValInt(childnode2));
+					childnode2 = xml->enterNode(childnode1, "external");
+					if(childnode2)
+						Network::g_extSendWindowMessagesOverflow = KBE_MAX(0, xml->getValInt(childnode2));
 
-				childnode2 = xml->enterNode(childnode1, "critical");
-				if(childnode2)
-					Network::g_receiveWindowMessagesOverflowCritical = KBE_MAX(0, xml->getValInt(childnode2));
+					childnode2 = xml->enterNode(childnode1, "critical");
+					if(childnode2)
+						Network::g_sendWindowMessagesOverflowCritical = KBE_MAX(0, xml->getValInt(childnode2));
+				}
+
+				childnode1 = xml->enterNode(sendNode, "bytes");
+				if(childnode1)
+				{
+					TiXmlNode* childnode2 = xml->enterNode(childnode1, "internal");
+					if(childnode2)
+						Network::g_intSendWindowBytesOverflow = KBE_MAX(0, xml->getValInt(childnode2));
+				
+					childnode2 = xml->enterNode(childnode1, "external");
+					if(childnode2)
+						Network::g_extSendWindowBytesOverflow = KBE_MAX(0, xml->getValInt(childnode2));
+				}
 			}
 
-			childnode1 = xml->enterNode(childnode, "bytes");
-			if(childnode1)
+			TiXmlNode* recvNode = xml->enterNode(childnode, "receive");
+			if(recvNode)
 			{
-				TiXmlNode* childnode2 = xml->enterNode(childnode1, "internal");
-				if(childnode2)
-					Network::g_intReceiveWindowBytesOverflow = KBE_MAX(0, xml->getValInt(childnode2));
+				TiXmlNode* childnode1 = xml->enterNode(recvNode, "messages");
+				if(childnode1)
+				{
+					TiXmlNode* childnode2 = xml->enterNode(childnode1, "internal");
+					if(childnode2)
+						Network::g_intReceiveWindowMessagesOverflow = KBE_MAX(0, xml->getValInt(childnode2));
+
+					childnode2 = xml->enterNode(childnode1, "external");
+					if(childnode2)
+						Network::g_extReceiveWindowMessagesOverflow = KBE_MAX(0, xml->getValInt(childnode2));
+
+					childnode2 = xml->enterNode(childnode1, "critical");
+					if(childnode2)
+						Network::g_receiveWindowMessagesOverflowCritical = KBE_MAX(0, xml->getValInt(childnode2));
+				}
+
+				childnode1 = xml->enterNode(recvNode, "bytes");
+				if(childnode1)
+				{
+					TiXmlNode* childnode2 = xml->enterNode(childnode1, "internal");
+					if(childnode2)
+						Network::g_intReceiveWindowBytesOverflow = KBE_MAX(0, xml->getValInt(childnode2));
 				
-				childnode2 = xml->enterNode(childnode1, "external");
-				if(childnode2)
-					Network::g_extReceiveWindowBytesOverflow = KBE_MAX(0, xml->getValInt(childnode2));
+					childnode2 = xml->enterNode(childnode1, "external");
+					if(childnode2)
+						Network::g_extReceiveWindowBytesOverflow = KBE_MAX(0, xml->getValInt(childnode2));
+				}
 			}
 		};
 
@@ -320,23 +361,23 @@ bool ServerConfig::loadConfig(std::string fileName)
 		bitsPerSecondToClient_ = xml->getValInt(rootNode);
 	}
 
-	rootNode = xml->getRootNode("billingSystem");
+	rootNode = xml->getRootNode("interfaces");
 	if(rootNode != NULL)
 	{
 		TiXmlNode* childnode = xml->enterNode(rootNode, "accountType");
 		if(childnode)
 		{
-			billingSystem_accountType_ = xml->getValStr(childnode);
-			if(billingSystem_accountType_.size() == 0)
-				billingSystem_accountType_ = "normal";
+			interfaces_accountType_ = xml->getValStr(childnode);
+			if(interfaces_accountType_.size() == 0)
+				interfaces_accountType_ = "normal";
 		}
 
 		childnode = xml->enterNode(rootNode, "chargeType");
 		if(childnode)
 		{
-			billingSystem_chargeType_ = xml->getValStr(childnode);
-			if(billingSystem_chargeType_.size() == 0)
-				billingSystem_chargeType_ = "normal";
+			interfaces_chargeType_ = xml->getValStr(childnode);
+			if(interfaces_chargeType_.size() == 0)
+				interfaces_chargeType_ = "normal";
 		}
 
 		std::string ip = "";
@@ -347,8 +388,8 @@ bool ServerConfig::loadConfig(std::string fileName)
 			if(ip.size() == 0)
 				ip = "localhost";
 
-			Network::Address addr(ip, ntohs(billingSystemAddr_.port));
-			billingSystemAddr_ = addr;
+			Network::Address addr(ip, ntohs(interfacesAddr_.port));
+			interfacesAddr_ = addr;
 		}
 
 		uint16 port = 0;
@@ -358,50 +399,50 @@ bool ServerConfig::loadConfig(std::string fileName)
 			port = xml->getValInt(childnode);
 
 			if(port <= 0)
-				port = KBE_BILLING_TCP_PORT;
+				port = KBE_INTERFACES_TCP_PORT;
 
-			Network::Address addr(inet_ntoa((struct in_addr&)billingSystemAddr_.ip), port);
-			billingSystemAddr_ = addr;
+			Network::Address addr(inet_ntoa((struct in_addr&)interfacesAddr_.ip), port);
+			interfacesAddr_ = addr;
 		}
 
 		childnode = xml->enterNode(rootNode, "thirdpartyAccountService_addr");
 		if(childnode)
 		{
-			billingSystem_thirdpartyAccountServiceAddr_ = xml->getValStr(childnode);
+			interfaces_thirdpartyAccountServiceAddr_ = xml->getValStr(childnode);
 		}
 
 		childnode = xml->enterNode(rootNode, "thirdpartyAccountService_port");
 		if(childnode)
 		{
-			billingSystem_thirdpartyAccountServicePort_ = xml->getValInt(childnode);
+			interfaces_thirdpartyAccountServicePort_ = xml->getValInt(childnode);
 		}
 		
 		childnode = xml->enterNode(rootNode, "thirdpartyChargeService_addr");
 		if(childnode)
 		{
-			billingSystem_thirdpartyChargeServiceAddr_ = xml->getValStr(childnode);
+			interfaces_thirdpartyChargeServiceAddr_ = xml->getValStr(childnode);
 		}
 
 		childnode = xml->enterNode(rootNode, "thirdpartyChargeService_port");
 		if(childnode)
 		{
-			billingSystem_thirdpartyChargeServicePort_ = xml->getValInt(childnode);
+			interfaces_thirdpartyChargeServicePort_ = xml->getValInt(childnode);
 		}
 
 		childnode = xml->enterNode(rootNode, "thirdpartyService_cbport");
 		if(childnode)
 		{
-			billingSystem_thirdpartyServiceCBPort_ = xml->getValInt(childnode);
+			interfaces_thirdpartyServiceCBPort_ = xml->getValInt(childnode);
 		}
 
 		node = xml->enterNode(rootNode, "SOMAXCONN");
 		if(node != NULL){
-			_billingInfo.tcp_SOMAXCONN = xml->getValInt(node);
+			_interfacesInfo.tcp_SOMAXCONN = xml->getValInt(node);
 		}
 
 		node = xml->enterNode(rootNode, "orders_timeout");
 		if(node != NULL){
-			billingSystem_orders_timeout_ = xml->getValInt(node);
+			interfaces_orders_timeout_ = xml->getValInt(node);
 		}
 	}
 
@@ -483,6 +524,10 @@ bool ServerConfig::loadConfig(std::string fileName)
 		if(node != NULL){
 			_cellAppInfo.entitydefAliasID = (xml->getValStr(node) == "true");
 		}
+
+		node = xml->enterNode(rootNode, "loadSmoothingBias");
+		if(node != NULL)
+			_cellAppInfo.loadSmoothingBias = float(xml->getValFloat(node));
 
 		node = xml->enterNode(rootNode, "ghostDistance");
 		if(node != NULL){
@@ -931,7 +976,7 @@ bool ServerConfig::loadConfig(std::string fileName)
 		}
 	}
 	
-	rootNode = xml->getRootNode("kbmachine");
+	rootNode = xml->getRootNode("machine");
 	if(rootNode != NULL)
 	{
 		node = xml->enterNode(rootNode, "internalInterface");	
@@ -1042,16 +1087,16 @@ bool ServerConfig::loadConfig(std::string fileName)
 		}
 	}
 
-	rootNode = xml->getRootNode("messagelog");
+	rootNode = xml->getRootNode("logger");
 	if(rootNode != NULL)
 	{
-		node = xml->enterNode(rootNode, "messagelog");	
+		node = xml->enterNode(rootNode, "logger");	
 		if(node != NULL)
-			strncpy((char*)&_messagelogInfo.internalInterface, xml->getValStr(node).c_str(), MAX_NAME);
+			strncpy((char*)&_loggerInfo.internalInterface, xml->getValStr(node).c_str(), MAX_NAME);
 
 		node = xml->enterNode(rootNode, "SOMAXCONN");
 		if(node != NULL){
-			_messagelogInfo.tcp_SOMAXCONN = xml->getValInt(node);
+			_loggerInfo.tcp_SOMAXCONN = xml->getValInt(node);
 		}
 
 		node = xml->enterNode(rootNode, "tick_max_buffered_logs");
@@ -1065,129 +1110,125 @@ bool ServerConfig::loadConfig(std::string fileName)
 		}
 	}
 
-	SAFE_RELEASE(xml);
-
 	if(email_service_config.size() > 0)
 	{
-		xml = new XmlPlus(Resmgr::getSingleton().matchRes(email_service_config).c_str());
+		SmartPointer<XML> emailxml(new XML(Resmgr::getSingleton().matchRes(email_service_config).c_str()));
 
-		if(!xml->isGood())
+		if(!emailxml->isGood())
 		{
 			ERROR_MSG(fmt::format("ServerConfig::loadConfig: load {} is failed!\n",
 				email_service_config.c_str()));
 
-			SAFE_RELEASE(xml);
 			return false;
 		}
 
-		TiXmlNode* childnode = xml->getRootNode("smtp_server");
+		TiXmlNode* childnode = emailxml->getRootNode("smtp_server");
 		if(childnode)
-			emailServerInfo_.smtp_server = xml->getValStr(childnode);
+			emailServerInfo_.smtp_server = emailxml->getValStr(childnode);
 
-		childnode = xml->getRootNode("smtp_port");
+		childnode = emailxml->getRootNode("smtp_port");
 		if(childnode)
-			emailServerInfo_.smtp_port = xml->getValInt(childnode);
+			emailServerInfo_.smtp_port = emailxml->getValInt(childnode);
 
-		childnode = xml->getRootNode("username");
+		childnode = emailxml->getRootNode("username");
 		if(childnode)
-			emailServerInfo_.username = xml->getValStr(childnode);
+			emailServerInfo_.username = emailxml->getValStr(childnode);
 
-		childnode = xml->getRootNode("password");
+		childnode = emailxml->getRootNode("password");
 		if(childnode)
 		{
-			emailServerInfo_.password = xml->getValStr(childnode);
+			emailServerInfo_.password = emailxml->getValStr(childnode);
 		}
 
-		childnode = xml->getRootNode("smtp_auth");
+		childnode = emailxml->getRootNode("smtp_auth");
 		if(childnode)
-			emailServerInfo_.smtp_auth = xml->getValInt(childnode);
+			emailServerInfo_.smtp_auth = emailxml->getValInt(childnode);
 
-		TiXmlNode* rootNode1 = xml->getRootNode("email_activation");
+		TiXmlNode* rootNode1 = emailxml->getRootNode("email_activation");
 		if(rootNode1 != NULL)
 		{
-			TiXmlNode* childnode1 = xml->enterNode(rootNode1, "subject");
+			TiXmlNode* childnode1 = emailxml->enterNode(rootNode1, "subject");
 			if(childnode1)
 				emailAtivationInfo_.subject = childnode1->ToText()->Value();
 
-			childnode1 = xml->enterNode(rootNode1, "message");
+			childnode1 = emailxml->enterNode(rootNode1, "message");
 			if(childnode1)
 				emailAtivationInfo_.message = childnode1->ToText()->Value();
 
-			childnode1 = xml->enterNode(rootNode1, "deadline");
+			childnode1 = emailxml->enterNode(rootNode1, "deadline");
 			if(childnode1)
-				emailAtivationInfo_.deadline = xml->getValInt(childnode1);
+				emailAtivationInfo_.deadline = emailxml->getValInt(childnode1);
 
-			childnode1 = xml->enterNode(rootNode1, "backlink_success_message");
+			childnode1 = emailxml->enterNode(rootNode1, "backlink_success_message");
 			if(childnode1)
 				emailAtivationInfo_.backlink_success_message = childnode1->ToText()->Value();
 
-			childnode1 = xml->enterNode(rootNode1, "backlink_fail_message");
+			childnode1 = emailxml->enterNode(rootNode1, "backlink_fail_message");
 			if(childnode1)
 				emailAtivationInfo_.backlink_fail_message = childnode1->ToText()->Value();
 
-			childnode1 = xml->enterNode(rootNode1, "backlink_hello_message");
+			childnode1 = emailxml->enterNode(rootNode1, "backlink_hello_message");
 			if(childnode1)
 				emailAtivationInfo_.backlink_hello_message = childnode1->ToText()->Value();
 		}
 
-		rootNode1 = xml->getRootNode("email_resetpassword");
+		rootNode1 = emailxml->getRootNode("email_resetpassword");
 		if(rootNode1 != NULL)
 		{
-			TiXmlNode* childnode1 = xml->enterNode(rootNode1, "subject");
+			TiXmlNode* childnode1 = emailxml->enterNode(rootNode1, "subject");
 			if(childnode1)
 				emailResetPasswordInfo_.subject = childnode1->ToText()->Value();
 
-			childnode1 = xml->enterNode(rootNode1, "message");
+			childnode1 = emailxml->enterNode(rootNode1, "message");
 			if(childnode1)
 				emailResetPasswordInfo_.message = childnode1->ToText()->Value();
 
-			childnode1 = xml->enterNode(rootNode1, "deadline");
+			childnode1 = emailxml->enterNode(rootNode1, "deadline");
 			if(childnode1)
-				emailResetPasswordInfo_.deadline = xml->getValInt(childnode1);
+				emailResetPasswordInfo_.deadline = emailxml->getValInt(childnode1);
 
-			childnode1 = xml->enterNode(rootNode1, "backlink_success_message");
+			childnode1 = emailxml->enterNode(rootNode1, "backlink_success_message");
 			if(childnode1)
 				emailResetPasswordInfo_.backlink_success_message = childnode1->ToText()->Value();
 
-			childnode1 = xml->enterNode(rootNode1, "backlink_fail_message");
+			childnode1 = emailxml->enterNode(rootNode1, "backlink_fail_message");
 			if(childnode1)
 				emailResetPasswordInfo_.backlink_fail_message = childnode1->ToText()->Value();
 
-			childnode1 = xml->enterNode(rootNode1, "backlink_hello_message");
+			childnode1 = emailxml->enterNode(rootNode1, "backlink_hello_message");
 			if(childnode1)
 				emailResetPasswordInfo_.backlink_hello_message = childnode1->ToText()->Value();
 		}
 
-		rootNode1 = xml->getRootNode("email_bind");
+		rootNode1 = emailxml->getRootNode("email_bind");
 		if(rootNode1 != NULL)
 		{
-			TiXmlNode* childnode1 = xml->enterNode(rootNode1, "subject");
+			TiXmlNode* childnode1 = emailxml->enterNode(rootNode1, "subject");
 			if(childnode1)
 				emailBindInfo_.subject = childnode1->ToText()->Value();
 
-			childnode1 = xml->enterNode(rootNode1, "message");
+			childnode1 = emailxml->enterNode(rootNode1, "message");
 			if(childnode1)
 				emailBindInfo_.message = childnode1->ToText()->Value();
 
-			childnode1 = xml->enterNode(rootNode1, "deadline");
+			childnode1 = emailxml->enterNode(rootNode1, "deadline");
 			if(childnode1)
-				emailBindInfo_.deadline = xml->getValInt(childnode1);
+				emailBindInfo_.deadline = emailxml->getValInt(childnode1);
 
-			childnode1 = xml->enterNode(rootNode1, "backlink_success_message");
+			childnode1 = emailxml->enterNode(rootNode1, "backlink_success_message");
 			if(childnode1)
 				emailBindInfo_.backlink_success_message = childnode1->ToText()->Value();
 
-			childnode1 = xml->enterNode(rootNode1, "backlink_fail_message");
+			childnode1 = emailxml->enterNode(rootNode1, "backlink_fail_message");
 			if(childnode1)
 				emailBindInfo_.backlink_fail_message = childnode1->ToText()->Value();
 
-			childnode1 = xml->enterNode(rootNode1, "backlink_hello_message");
+			childnode1 = emailxml->enterNode(rootNode1, "backlink_hello_message");
 			if(childnode1)
 				emailBindInfo_.backlink_hello_message = childnode1->ToText()->Value();
 		}
 	}
 
-	SAFE_RELEASE(xml);
 	return true;
 }
 

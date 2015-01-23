@@ -19,8 +19,8 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 
-#ifndef KBE_ENCRYPTION_FILTER_HPP
-#define KBE_ENCRYPTION_FILTER_HPP
+#ifndef KBE_ENCRYPTION_FILTER_H
+#define KBE_ENCRYPTION_FILTER_H
 
 #include "network/packet_filter.h"
 
@@ -51,7 +51,7 @@ public:
 	BlowfishFilter(const Key & key);
 	BlowfishFilter();
 
-	virtual Reason send(NetworkInterface & networkInterface, Channel * pChannel, Packet * pPacket);
+	virtual Reason send(Channel * pChannel, PacketSender& sender, Packet * pPacket);
 
 	virtual Reason recv(Channel * pChannel, PacketReceiver & receiver, Packet * pPacket);
 
@@ -83,4 +83,4 @@ inline EncryptionFilter* createEncryptionFilter(int8 type, const std::string& da
 }
 }
 
-#endif // KBE_ENCRYPTION_FILTER_HPP
+#endif // KBE_ENCRYPTION_FILTER_H

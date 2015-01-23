@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_ENGINE_COMPONENT_MGR_HPP
-#define KBE_ENGINE_COMPONENT_MGR_HPP
+#ifndef KBE_ENGINE_COMPONENT_MGR_H
+#define KBE_ENGINE_COMPONENT_MGR_H
 	
 // common include
 //#define NDEBUG
@@ -66,7 +66,7 @@ public:
 			groupOrderid = 0;
 			globalOrderid = 0;
 			pChannel = NULL;
-			shutdownState = 0;
+			state = COMPONENT_STATE_INIT;
 			mem = cpu = 0.f;
 			usedmem = 0;
 			extradata = extradata1 = extradata2 = 0;
@@ -75,7 +75,7 @@ public:
 			logTime = timestamp();
 		}
 
-		KBEShared_ptr<Network::Address > pIntAddr, pExtAddr;	// 内部和外部地址
+		KBEShared_ptr<Network::Address> pIntAddr, pExtAddr;		// 内部和外部地址
 		char externalAddressEx[MAX_NAME + 1];					// 强制暴露给外部的公网地址, 详见配置中的externalAddressEx
 
 		int32 uid;
@@ -85,7 +85,10 @@ public:
 		Network::Channel* pChannel;
 		COMPONENT_TYPE componentType;
 		uint32 flags;
-		int8 shutdownState;
+
+		// 进程状态
+		COMPONENT_STATE state;
+
 		float cpu;
 		float mem;
 		uint32 usedmem;
@@ -133,10 +136,14 @@ public:
 
 	Components::COMPONENTS& getComponents(COMPONENT_TYPE componentType);
 
+	/** 
+		查找组件
+	*/
 	Components::ComponentInfos* findComponent(COMPONENT_TYPE componentType, int32 uid, COMPONENT_ID componentID);
 	Components::ComponentInfos* findComponent(COMPONENT_TYPE componentType, COMPONENT_ID componentID);
 	Components::ComponentInfos* findComponent(COMPONENT_ID componentID);
 	Components::ComponentInfos* findComponent(Network::Channel * pChannel);
+	Components::ComponentInfos* findComponent(Network::Address* pAddress);
 
 	/** 
 		通过进程id寻找本地组件
@@ -156,12 +163,15 @@ public:
 	*/
 	bool checkComponents(int32 uid, COMPONENT_ID componentID, uint32 pid);
 
+	/** 
+		设置用于接收组件通知的处理器实例
+	*/
 	void pHandler(ComponentsNotificationHandler* ph){ _pHandler = ph; };
 
 	/** 
 		检查某个组件端口是否有效.
 	*/
-	bool checkComponentPortUsable(const Components::ComponentInfos* info);
+	bool updateComponentInfos(const Components::ComponentInfos* info);
 
 	/** 
 		是否是本地组件.
@@ -176,13 +186,13 @@ public:
 	Components::ComponentInfos* getBaseappmgr();
 	Components::ComponentInfos* getCellappmgr();
 	Components::ComponentInfos* getDbmgr();
-	Components::ComponentInfos* getMessagelog();
-	Components::ComponentInfos* getBillings();
+	Components::ComponentInfos* getLogger();
+	Components::ComponentInfos* getInterfaceses();
 
 	Network::Channel* getBaseappmgrChannel();
 	Network::Channel* getCellappmgrChannel();
 	Network::Channel* getDbmgrChannel();
-	Network::Channel* getMessagelogChannel();
+	Network::Channel* getLoggerChannel();
 
 	/** 
 		获取游戏服务端必要组件的注册数量。
@@ -197,10 +207,17 @@ public:
 	Network::EventDispatcher & dispatcher();
 
 	void onChannelDeregister(Network::Channel * pChannel, bool isShutingdown);
+
+	void extraData1(uint64 v){ extraData1_ = v; }
+	void extraData2(uint64 v){ extraData2_ = v; }
+	void extraData3(uint64 v){ extraData3_ = v; }
+	void extraData4(uint64 v){ extraData4_ = v; }
+
 private:
 	virtual bool process();
 	bool findInterfaces();
 
+	void onFoundAllComponents();
 private:
 	COMPONENTS								_baseapps;
 	COMPONENTS								_cellapps;
@@ -209,8 +226,8 @@ private:
 	COMPONENTS								_cellappmgrs;
 	COMPONENTS								_baseappmgrs;
 	COMPONENTS								_machines;
-	COMPONENTS								_messagelogs;
-	COMPONENTS								_billings;
+	COMPONENTS								_loggers;
+	COMPONENTS								_interfaceses;
 	COMPONENTS								_bots;
 	COMPONENTS								_consoles;
 
@@ -225,15 +242,22 @@ private:
 
 	ComponentsNotificationHandler*			_pHandler;
 
-	// 以下组网用
+	// 本组件的类别
 	COMPONENT_TYPE							componentType_;
+
 	// 本组件的ID
-	COMPONENT_ID							componentID_;									
+	COMPONENT_ID							componentID_;	
+
 	uint8									state_;
 	int16									findIdx_;
 	int8									findComponentTypes_[8];
+
+	uint64									extraData1_;
+	uint64									extraData2_;
+	uint64									extraData3_;
+	uint64									extraData4_;
 };
 
 }
 
-#endif // KBE_ENGINE_COMPONENT_MGR_HPP
+#endif // KBE_ENGINE_COMPONENT_MGR_H

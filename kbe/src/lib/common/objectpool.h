@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_OBJECTPOOL_HPP
-#define KBE_OBJECTPOOL_HPP
+#ifndef KBE_OBJECTPOOL_H
+#define KBE_OBJECTPOOL_H
 	
 // common include	
 //#define NDEBUG
@@ -32,15 +32,15 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 #include <vector>
 #include <queue> 
 
-#include "thread/threadmutex.h"
-
 // windows include	
 #if KBE_PLATFORM == PLATFORM_WIN32
 #else
 // linux include
 #include <errno.h>
 #endif
-	
+
+#include "thread/threadmutex.h"
+
 namespace KBEngine{
 
 #define OBJECT_POOL_INIT_SIZE	16
@@ -49,6 +49,11 @@ namespace KBEngine{
 template< typename T >
 class SmartPoolObject;
 
+/*
+	一些对象会非常频繁的被创建， 例如：MemoryStream, Bundle, TCPPacket等等
+	这个对象池对通过服务端峰值有效的预估提前创建出一些对象缓存起来，在用到的时候直接从对象池中
+	获取一个未被使用的对象即可。
+*/
 template< typename T >
 class ObjectPool
 {
@@ -61,7 +66,7 @@ public:
 		isDestroyed_(false),
 		mutex_(),
 		name_(name),
-		totalAlloc_(0),
+		total_allocs_(0),
 		obj_count_(0)
 	{
 	}
@@ -72,7 +77,7 @@ public:
 		isDestroyed_(false),
 		mutex_(),
 		name_(name),
-		totalAlloc_(0),
+		total_allocs_(0),
 		obj_count_(0)
 	{
 	}
@@ -85,9 +90,11 @@ public:
 	void destroy()
 	{
 		mutex_.lockMutex();
+
 		isDestroyed_ = true;
+
 		typename OBJECTS::iterator iter = objects_.begin();
-		for(; iter!=objects_.end(); iter++)
+		for(; iter!=objects_.end(); ++iter)
 		{
 			if(!(*iter)->destructorPoolObject())
 			{
@@ -104,9 +111,9 @@ public:
 
 	void assignObjs(unsigned int preAssignVal = OBJECT_POOL_INIT_SIZE)
 	{
-		for(unsigned int i=0; i<preAssignVal; i++){
+		for(unsigned int i=0; i<preAssignVal; ++i){
 			objects_.push_back(new T);
-			++totalAlloc_;
+			++total_allocs_;
 			++obj_count_;
 		}
 	}
@@ -186,14 +193,15 @@ public:
 	void reclaimObject(std::list<T*>& objs)
 	{
 		mutex_.lockMutex();
-		
+
 		typename std::list< T* >::iterator iter = objs.begin();
-		for(; iter != objs.end(); iter++)
+		for(; iter != objs.end(); ++iter)
 		{
 			reclaimObject_((*iter));
 		}
 		
 		objs.clear();
+
 		mutex_.unlockMutex();
 	}
 
@@ -203,14 +211,15 @@ public:
 	void reclaimObject(std::vector< T* >& objs)
 	{
 		mutex_.lockMutex();
-		
+
 		typename std::vector< T* >::iterator iter = objs.begin();
-		for(; iter != objs.end(); iter++)
+		for(; iter != objs.end(); ++iter)
 		{
 			reclaimObject_((*iter));
 		}
 		
 		objs.clear();
+
 		mutex_.unlockMutex();
 	}
 
@@ -220,7 +229,7 @@ public:
 	void reclaimObject(std::queue<T*>& objs)
 	{
 		mutex_.lockMutex();
-		
+
 		while(!objs.empty())
 		{
 			T* t = objs.front();
@@ -235,18 +244,20 @@ public:
 	
 	std::string c_str()
 	{
+		char buf[1024];
+
 		mutex_.lockMutex();
 
-		char buf[1024];
 		sprintf(buf, "ObjectPool::c_str(): name=%s, objs=%d/%d, isDestroyed=%s.\n", 
 			name_.c_str(), (int)obj_count_, (int)max_, (isDestroyed ? "true" : "false"));
 
 		mutex_.unlockMutex();
+
 		return buf;
 	}
 
 	size_t max()const{ return max_; }
-	size_t totalAlloc()const{ return totalAlloc_; }
+	size_t totalAllocs()const{ return total_allocs_; }
 
 	bool isDestroyed()const{ return isDestroyed_; }
 
@@ -261,7 +272,7 @@ protected:
 			if(size() >= max_ || isDestroyed_)
 			{
 				delete obj;
-				--totalAlloc_;
+				--total_allocs_;
 			}
 			else
 			{
@@ -272,18 +283,22 @@ protected:
 	}
 
 protected:
-	OBJECTS objects_;							// 对象缓冲器
+	OBJECTS objects_;
 
 	size_t max_;
 
 	bool isDestroyed_;
 
+	// 一些原因导致锁还是有必要的
+	// 例如：dbmgr任务线程中输出log，cellapp中加载navmesh后的线程回调导致的log输出
 	KBEngine::thread::ThreadMutex mutex_;
 
 	std::string name_;
 
-	size_t totalAlloc_;
+	size_t total_allocs_;
 
+	// Linux环境中，list.size()使用的是std::distance(begin(), end())方式来获得
+	// 会对性能有影响，这里我们自己对size做一个记录
 	size_t obj_count_;
 };
 

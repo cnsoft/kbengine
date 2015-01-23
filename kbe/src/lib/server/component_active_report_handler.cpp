@@ -31,8 +31,8 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 #include "../../server/cellapp/cellapp_interface.h"
 #include "../../server/dbmgr/dbmgr_interface.h"
 #include "../../server/loginapp/loginapp_interface.h"
-#include "../../server/tools/message_log/messagelog_interface.h"
-#include "../../server/tools/billing_system/billingsystem_interface.h"
+#include "../../server/tools/logger/logger_interface.h"
+#include "../../server/tools/interfaces/interfaces_interface.h"
 
 namespace KBEngine { 
 
@@ -60,7 +60,7 @@ void ComponentActiveReportHandler::cancel()
 void ComponentActiveReportHandler::startActiveTick(float period)
 {
 	cancel();
-	pActiveTimerHandle_ = pApp_->mainDispatcher().addTimer(int(period * 1000000),
+	pActiveTimerHandle_ = pApp_->dispatcher().addTimer(int(period * 1000000),
 									this, (void *)TIMEOUT_ACTIVE_TICK);
 }
 
@@ -72,7 +72,7 @@ void ComponentActiveReportHandler::handleTimeout(TimerHandle handle, void * arg)
 		case TIMEOUT_ACTIVE_TICK:
 		{
 			int8 findComponentTypes[] = {BASEAPPMGR_TYPE, CELLAPPMGR_TYPE, DBMGR_TYPE, CELLAPP_TYPE, 
-								BASEAPP_TYPE, LOGINAPP_TYPE, MESSAGELOG_TYPE, UNKNOWN_COMPONENT_TYPE};
+								BASEAPP_TYPE, LOGINAPP_TYPE, LOGGER_TYPE, UNKNOWN_COMPONENT_TYPE};
 			
 			int ifind = 0;
 			while(findComponentTypes[ifind] != UNKNOWN_COMPONENT_TYPE)
@@ -81,17 +81,18 @@ void ComponentActiveReportHandler::handleTimeout(TimerHandle handle, void * arg)
 
 				Components::COMPONENTS& components = Components::getSingleton().getComponents(componentType);
 				Components::COMPONENTS::iterator iter = components.begin();
-				for(; iter != components.end(); iter++)
+				for(; iter != components.end(); ++iter)
 				{
 					Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 					COMMON_NETWORK_MESSAGE(componentType, (*pBundle), onAppActiveTick);
 					
 					(*pBundle) << g_componentType;
 					(*pBundle) << g_componentID;
-					if((*iter).pChannel != NULL)
-						(*pBundle).send(pApp_->networkInterface(), (*iter).pChannel);
 
-					Network::Bundle::ObjPool().reclaimObject(pBundle);
+					if((*iter).pChannel != NULL)
+						(*iter).pChannel->send(pBundle);
+					else
+						Network::Bundle::ObjPool().reclaimObject(pBundle);
 				}
 
 				ifind++;

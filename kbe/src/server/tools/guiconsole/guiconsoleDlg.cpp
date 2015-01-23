@@ -10,7 +10,7 @@
 #include "network/message_handler.h"
 #include "server/components.h"
 #include "helper/console_helper.h"
-#include "xmlplus/xmlplus.h"
+#include "xml/xml.h"
 
 #undef DEFINE_IN_INTERFACE
 #include "client_lib/client_interface.h"
@@ -53,9 +53,9 @@
 #include "cellappmgr/cellappmgr_interface.h"
 
 #undef DEFINE_IN_INTERFACE
-#include "tools/message_log/messagelog_interface.h"
+#include "tools/logger/logger_interface.h"
 #define DEFINE_IN_INTERFACE
-#include "tools/message_log/messagelog_interface.h"
+#include "tools/logger/logger_interface.h"
 
 #undef DEFINE_IN_INTERFACE
 #include "tools/bots/bots_interface.h"
@@ -63,9 +63,9 @@
 #include "tools/bots/bots_interface.h"
 
 #undef DEFINE_IN_INTERFACE
-#include "tools/billing_system/billingsystem_interface.h"
+#include "tools/interfaces/interfaces_interface.h"
 #define DEFINE_IN_INTERFACE
-#include "tools/billing_system/billingsystem_interface.h"
+#include "tools/interfaces/interfaces_interface.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -152,7 +152,7 @@ public:
 
 	virtual bool process()
 	{
-		//COMPONENT_TYPE findComponentTypes[] = {MESSAGELOG_TYPE, BASEAPP_TYPE, CELLAPP_TYPE, BASEAPPMGR_TYPE, CELLAPPMGR_TYPE, LOGINAPP_TYPE, DBMGR_TYPE, BOTS_TYPE, UNKNOWN_COMPONENT_TYPE};
+		//COMPONENT_TYPE findComponentTypes[] = {LOGGER_TYPE, BASEAPP_TYPE, CELLAPP_TYPE, BASEAPPMGR_TYPE, CELLAPPMGR_TYPE, LOGINAPP_TYPE, DBMGR_TYPE, BOTS_TYPE, UNKNOWN_COMPONENT_TYPE};
 		int ifind = 0;
 
 		if(g_isDestroyed)
@@ -586,18 +586,18 @@ void CguiconsoleDlg::commitPythonCommand(CString strCommand)
 	Network::Channel* pChannel = _networkInterface.findChannel(this->getTreeItemAddr(m_tree.GetSelectedItem()));
 	if(pChannel)
 	{
-		Network::Bundle bundle;
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 		if(getTreeItemComponent(m_tree.GetSelectedItem()) == BASEAPP_TYPE)
-			bundle.newMessage(BaseappInterface::onExecScriptCommand);
+			(*pBundle).newMessage(BaseappInterface::onExecScriptCommand);
 		else if(getTreeItemComponent(m_tree.GetSelectedItem()) == CELLAPP_TYPE)
-			bundle.newMessage(CellappInterface::onExecScriptCommand);
+			(*pBundle).newMessage(CellappInterface::onExecScriptCommand);
 		else
-			bundle.newMessage(BotsInterface::onExecScriptCommand);
+			(*pBundle).newMessage(BotsInterface::onExecScriptCommand);
 
 		ArraySize size = outcmd.size();
-		bundle << size;
-		bundle.append(outcmd.data(), size);
-		bundle.send(this->networkInterface(), pChannel);
+		(*pBundle) << size;
+		(*pBundle).append(outcmd.data(), size);
+		pChannel->send(pBundle);
 
 		CString str1, str2;
 		m_debugWnd.displaybufferWnd()->GetWindowText(str2);
@@ -750,6 +750,11 @@ HCURSOR CguiconsoleDlg::OnQueryDragIcon()
 	return static_cast<HCURSOR>(m_hIcon);
 }
 
+void CguiconsoleDlg::addThreadTask(thread::TPTask* tptask)
+{
+	threadPool_.addTask(tptask);
+}
+
 void CguiconsoleDlg::updateFindTreeStatus()
 {
 	static int count = 0;
@@ -758,7 +763,7 @@ void CguiconsoleDlg::updateFindTreeStatus()
 		count = 0;
 	}
 
-	CString s = L"finding server";
+	CString s = L"find server";
 
 	for(int i=0; i<count; i++)
 	{
@@ -785,7 +790,7 @@ void CguiconsoleDlg::updateFindTreeStatus()
 	tcitem.hParent = hItemRoot;
 	tcitem.hInsertAfter = TVI_LAST;
 	tcitem.item.mask = TVIF_TEXT|TVIF_PARAM|TVIF_IMAGE|TVIF_SELECTEDIMAGE;
-	CString s = L"finding server";
+	CString s = L"find server";
 
 	for(int i=0; i<count; i++)
 	{
@@ -822,7 +827,7 @@ void CguiconsoleDlg::OnTimer(UINT_PTR nIDEvent)
 		break;
 	case 2:
 		{
-			threadPool_.addTask(new FindServersTask(MESSAGELOG_TYPE));
+			threadPool_.addTask(new FindServersTask(LOGGER_TYPE));
 			threadPool_.addTask(new FindServersTask(BASEAPP_TYPE));
 			threadPool_.addTask(new FindServersTask(CELLAPP_TYPE));
 			threadPool_.addTask(new FindServersTask(BASEAPPMGR_TYPE));
@@ -840,20 +845,20 @@ void CguiconsoleDlg::OnTimer(UINT_PTR nIDEvent)
 			for(; iter != channels.end(); iter++)
 			{
 				Network::Channel* pChannel = const_cast<KBEngine::Network::Channel*>(iter->second);
-				Network::Bundle bundle;
+				Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 
 				if(pChannel->proxyID() != BOTS_TYPE)
 				{
-					COMMON_NETWORK_MESSAGE((KBEngine::COMPONENT_TYPE)pChannel->proxyID(), bundle, onAppActiveTick);
+					COMMON_NETWORK_MESSAGE((KBEngine::COMPONENT_TYPE)pChannel->proxyID(), (*pBundle), onAppActiveTick);
 				}
 				else
 				{
-					bundle.newMessage(BotsInterface::onAppActiveTick);
+					(*pBundle).newMessage(BotsInterface::onAppActiveTick);
 				}
 
-				bundle << _componentType;
-				bundle << _componentID;
-				bundle.send(networkInterface(), pChannel);
+				(*pBundle) << _componentType;
+				(*pBundle) << _componentID;
+				pChannel->send(pBundle);
 
 				pChannel->updateLastReceivedTime();
 			}
@@ -975,7 +980,7 @@ void CguiconsoleDlg::updateTree()
 	Components::COMPONENTS& cts3 = Components::getSingleton().getComponents(CELLAPPMGR_TYPE);
 	Components::COMPONENTS& cts4 = Components::getSingleton().getComponents(DBMGR_TYPE);
 	Components::COMPONENTS& cts5 = Components::getSingleton().getComponents(LOGINAPP_TYPE);
-	Components::COMPONENTS& cts6 = Components::getSingleton().getComponents(MESSAGELOG_TYPE);
+	Components::COMPONENTS& cts6 = Components::getSingleton().getComponents(LOGGER_TYPE);
 	Components::COMPONENTS& cts7 = Components::getSingleton().getComponents(BOTS_TYPE);
 	Components::COMPONENTS cts;
 	
@@ -1157,19 +1162,19 @@ void CguiconsoleDlg::reqQueryWatcher(std::string paths)
 
 	if(pChannel)
 	{
-		Network::Bundle bundle;
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 
 		if(debugComponentType == BOTS_TYPE)
 		{
-			bundle.newMessage(BotsInterface::queryWatcher);
+			(*pBundle).newMessage(BotsInterface::queryWatcher);
 		}
 		else
 		{
-			COMMON_NETWORK_MESSAGE(debugComponentType, bundle, queryWatcher);
+			COMMON_NETWORK_MESSAGE(debugComponentType, (*pBundle), queryWatcher);
 		}
 
-		bundle << paths;
-		bundle.send(_networkInterface, pChannel);
+		(*pBundle) << paths;
+		pChannel->send(pBundle);
 	}
 }
 
@@ -1189,7 +1194,7 @@ COMPONENT_TYPE CguiconsoleDlg::getTreeItemComponent(HTREEITEM hItem)
 		fi_baseapp = -1;
 	int fi_loginapp = s.Find(L"loginapp", 0);
 	int fi_dbmgr = s.Find(L"dbmgr", 0);
-	int fi_messagelog = s.Find(L"messagelog", 0);
+	int fi_logger = s.Find(L"logger", 0);
 	int fi_bots = s.Find(L"bots", 0);
 
 	if(fi_cellapp  < 0 &&
@@ -1197,7 +1202,7 @@ COMPONENT_TYPE CguiconsoleDlg::getTreeItemComponent(HTREEITEM hItem)
 		fi_cellappmgr < 0 &&
 		fi_baseappmgr < 0 &&
 		fi_loginapp < 0 &&
-		fi_messagelog < 0 &&
+		fi_logger < 0 &&
 		fi_dbmgr < 0 &&
 		fi_bots < 0)
 	{
@@ -1228,9 +1233,9 @@ COMPONENT_TYPE CguiconsoleDlg::getTreeItemComponent(HTREEITEM hItem)
 	{
 		return DBMGR_TYPE;
 	}
-	else if(fi_messagelog >= 0)
+	else if(fi_logger >= 0)
 	{
-		return MESSAGELOG_TYPE;
+		return LOGGER_TYPE;
 	}
 	else if(fi_bots >= 0)
 	{
@@ -1238,6 +1243,46 @@ COMPONENT_TYPE CguiconsoleDlg::getTreeItemComponent(HTREEITEM hItem)
 	}
 
 	return UNKNOWN_COMPONENT_TYPE;
+}
+
+int32 CguiconsoleDlg::getSelTreeItemUID()
+{
+	HTREEITEM hItem = m_tree.GetSelectedItem();
+	if(hItem == NULL)
+		return 0;
+
+	CString s = m_tree.GetItemText(hItem);
+	if(s.Find(L"uid[") >= 0)
+	{
+		s.Replace(L"uid[", L"");
+		s.Replace(L"]", L"");
+	}
+	else
+	{
+		hItem = m_tree.GetParentItem(hItem);
+		if(hItem == NULL)
+			return 0;
+
+		s = m_tree.GetItemText(hItem);
+		if(s.Find(L"uid[") >= 0)
+		{
+			s.Replace(L"uid[", L"");
+			s.Replace(L"]", L"");
+		}
+		else
+		{
+			s = L"";
+		}
+	}
+
+	if(s.GetLength() == 0)
+		return 0;
+
+	char* buf = KBEngine::strutil::wchar2char(s.GetBuffer(0));
+	int32 uid = atoi(buf);
+	free(buf);
+
+	return uid;
 }
 
 Network::Address CguiconsoleDlg::getTreeItemAddr(HTREEITEM hItem)
@@ -1256,7 +1301,7 @@ Network::Address CguiconsoleDlg::getTreeItemAddr(HTREEITEM hItem)
 		fi_baseapp = -1;
 	int fi_loginapp = s.Find(L"loginapp", 0);
 	int fi_dbmgr = s.Find(L"dbmgr", 0);
-	int fi_messagelog = s.Find(L"messagelog", 0);
+	int fi_logger = s.Find(L"logger", 0);
 	int fi_bots = s.Find(L"bots", 0);
 
 	if(fi_cellapp  < 0 &&
@@ -1264,7 +1309,7 @@ Network::Address CguiconsoleDlg::getTreeItemAddr(HTREEITEM hItem)
 		fi_cellappmgr < 0 &&
 		fi_baseappmgr < 0 &&
 		fi_loginapp < 0 &&
-		fi_messagelog < 0 &&
+		fi_logger < 0 &&
 		fi_dbmgr < 0 &&
 		fi_bots < 0)
 	{
@@ -1273,6 +1318,7 @@ Network::Address CguiconsoleDlg::getTreeItemAddr(HTREEITEM hItem)
 
 	char* buf = KBEngine::strutil::wchar2char(s.GetBuffer(0));
 	std::string sbuf = buf;
+	free(buf);
 
 	std::string::size_type i = sbuf.find("[");
 	std::string::size_type j = sbuf.find("]");
@@ -1363,7 +1409,7 @@ void CguiconsoleDlg::OnMenu_Update()
 {
 	_networkInterface.deregisterAllChannels();
 	Components::getSingleton().clear();
-	Components::getSingleton().delComponent(Components::ANY_UID, MESSAGELOG_TYPE, 0, true, false);
+	Components::getSingleton().delComponent(Components::ANY_UID, LOGGER_TYPE, 0, true, false);
 	Components::getSingleton().delComponent(Components::ANY_UID, BOTS_TYPE, 0, true, false);
 	::SetTimer(m_hWnd, 2, 100, NULL);
 }
@@ -1510,7 +1556,7 @@ void CguiconsoleDlg::OnNMClickTree1(NMHDR *pNMHDR, LRESULT *pResult)
 
 	m_watcherWnd.clearAllData();
 
-	if(debugComponentType == MESSAGELOG_TYPE && changeToChecked)
+	if(debugComponentType == LOGGER_TYPE && changeToChecked)
 	{
 		HTREEITEM hItem = m_tree.GetSelectedItem(); 
 		KBEngine::Network::Address addr = getTreeItemAddr(hItem);
@@ -1595,7 +1641,7 @@ void CguiconsoleDlg::OnToolBar_StartServer()
 
 	_networkInterface.deregisterAllChannels();
 	Components::getSingleton().clear();
-	Components::getSingleton().delComponent(Components::ANY_UID, MESSAGELOG_TYPE, 0, true, false);
+	Components::getSingleton().delComponent(Components::ANY_UID, LOGGER_TYPE, 0, true, false);
 	Components::getSingleton().delComponent(Components::ANY_UID, BOTS_TYPE, 0, true, false);
 	::SetTimer(m_hWnd, 2, 1000, NULL);
 	*/
@@ -1688,33 +1734,34 @@ bool CguiconsoleDlg::startProfile(std::string name, int8 type, uint32 timinglen)
 	Network::Channel* pChannel = _networkInterface.findChannel(this->getTreeItemAddr(m_tree.GetSelectedItem()));
 	if(pChannel)
 	{
-		Network::Bundle bundle;
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 		if(getTreeItemComponent(m_tree.GetSelectedItem()) == BASEAPP_TYPE)
-			bundle.newMessage(BaseappInterface::startProfile);
+			(*pBundle).newMessage(BaseappInterface::startProfile);
 		else if(getTreeItemComponent(m_tree.GetSelectedItem()) == BASEAPPMGR_TYPE)
-			bundle.newMessage(BaseappmgrInterface::startProfile);
+			(*pBundle).newMessage(BaseappmgrInterface::startProfile);
 		else if(getTreeItemComponent(m_tree.GetSelectedItem()) == CELLAPP_TYPE)
-			bundle.newMessage(CellappInterface::startProfile);
+			(*pBundle).newMessage(CellappInterface::startProfile);
 		else if(getTreeItemComponent(m_tree.GetSelectedItem()) == CELLAPPMGR_TYPE)
-			bundle.newMessage(CellappmgrInterface::startProfile);
+			(*pBundle).newMessage(CellappmgrInterface::startProfile);
 		else if(getTreeItemComponent(m_tree.GetSelectedItem()) == DBMGR_TYPE)
-			bundle.newMessage(DbmgrInterface::startProfile);
+			(*pBundle).newMessage(DbmgrInterface::startProfile);
 		else if(getTreeItemComponent(m_tree.GetSelectedItem()) == LOGINAPP_TYPE)
-			bundle.newMessage(LoginappInterface::startProfile);
-		else if(getTreeItemComponent(m_tree.GetSelectedItem()) == MESSAGELOG_TYPE)
-			bundle.newMessage(MessagelogInterface::startProfile);
+			(*pBundle).newMessage(LoginappInterface::startProfile);
+		else if(getTreeItemComponent(m_tree.GetSelectedItem()) == LOGGER_TYPE)
+			(*pBundle).newMessage(LoggerInterface::startProfile);
 		else if(getTreeItemComponent(m_tree.GetSelectedItem()) == BOTS_TYPE)
-			bundle.newMessage(BotsInterface::startProfile);
+			(*pBundle).newMessage(BotsInterface::startProfile);
 		else
 		{
 			::AfxMessageBox(L"not support!");
+			Network::Bundle::ObjPool().reclaimObject(pBundle);
 			return false;
 		}
 
-		bundle << name;
-		bundle << type;
-		bundle << timinglen;
-		bundle.send(networkInterface(), pChannel);
+		(*pBundle) << name;
+		(*pBundle) << type;
+		(*pBundle) << timinglen;
+		pChannel->send(pBundle);
 		return true;
 	}
 

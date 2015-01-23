@@ -28,14 +28,9 @@ INLINE const Address & Channel::addr() const
 	return pEndPoint_->addr();
 }
 
-INLINE EndPoint * Channel::endpoint() const
+INLINE EndPoint * Channel::pEndPoint() const
 {
 	return pEndPoint_;
-}
-
-INLINE int Channel::windowSize() const
-{
-	return windowSize_;
 }
 
 INLINE PacketReader* Channel::pPacketReader()const
@@ -46,6 +41,16 @@ INLINE PacketReader* Channel::pPacketReader()const
 INLINE PacketReceiver* Channel::pPacketReceiver()const
 {
 	return pPacketReceiver_;
+}
+
+INLINE PacketSender* Channel::pPacketSender()const
+{
+	return pPacketSender_;
+}
+
+void Channel::pPacketSender(PacketSender* pPacketSender)
+{
+	pPacketSender_ = pPacketSender;
 }
 
 }

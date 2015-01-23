@@ -36,7 +36,7 @@ SyncEntityStreamTemplateHandler::SyncEntityStreamTemplateHandler(Network::Networ
 Task(),
 networkInterface_(networkInterface)
 {
-	networkInterface.dispatcher().addFrequentTask(this);
+	networkInterface.dispatcher().addTask(this);
 
 	MemoryStream accountDefMemoryStream;
 
@@ -54,7 +54,7 @@ networkInterface_(networkInterface)
 			ADD_POSDIR_TO_STREAM(accountDefMemoryStream, pos, dir);
 		}
 
-		for(; iter != propertyDescrs.end(); iter++)
+		for(; iter != propertyDescrs.end(); ++iter)
 		{
 			PropertyDescription* propertyDescription = iter->second;
 			accountDefMemoryStream << propertyDescription->getUType();
@@ -66,7 +66,7 @@ networkInterface_(networkInterface)
 //-------------------------------------------------------------------------------------
 SyncEntityStreamTemplateHandler::~SyncEntityStreamTemplateHandler()
 {
-	// networkInterface_.mainDispatcher().cancelFrequentTask(this);
+	// networkInterface_.dispatcher().cancelTask(this);
 	DEBUG_MSG("SyncEntityStreamTemplateHandler::~SyncEntityStreamTemplateHandler()\n");
 }
 
@@ -108,18 +108,18 @@ bool SyncEntityStreamTemplateHandler::process()
 		ADD_POSDIR_TO_STREAM(accountDefMemoryStream, pos, dir);
 	}
 
-	for(; iter != propertyDescrs.end(); iter++)
+	for(; iter != propertyDescrs.end(); ++iter)
 	{
 		PropertyDescription* propertyDescription = iter->second;
 		accountDefMemoryStream << propertyDescription->getUType();
 		propertyDescription->addPersistentToStream(&accountDefMemoryStream, NULL);
 	}
 
-	Network::Bundle::SmartPoolObjectPtr bundleptr = Network::Bundle::createSmartPoolObj();
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 
-	(*bundleptr)->newMessage(DbmgrInterface::syncEntityStreamTemplate);
-	(*bundleptr)->append(accountDefMemoryStream);
-	(*bundleptr)->send(networkInterface_, pChannel);
+	(*pBundle).newMessage(DbmgrInterface::syncEntityStreamTemplate);
+	(*pBundle).append(accountDefMemoryStream);
+	pChannel->send(pBundle);
 	delete this;
 	return false;
 }

@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_ENTITY_TABLE_MYSQL_HPP
-#define KBE_ENTITY_TABLE_MYSQL_HPP
+#ifndef KBE_ENTITY_TABLE_MYSQL_H
+#define KBE_ENTITY_TABLE_MYSQL_H
 #include "db_interface_mysql.h"
 #include "common.h"
 #include "common/common.h"
@@ -280,7 +280,7 @@ public:
 
 	virtual void init_db_item_name(const char* exstrFlag = "")
 	{
-		for(int i=0; i<2; i++)
+		for(int i=0; i<2; ++i)
 			kbe_snprintf(db_item_names_[i], MAX_BUF, TABLE_ITEM_PERFIX"_%d_%s%s", i, exstrFlag, itemName());
 	}
 
@@ -321,7 +321,7 @@ public:
 
 	virtual void init_db_item_name(const char* exstrFlag = "")
 	{
-		for(int i=0; i<3; i++)
+		for(int i=0; i<3; ++i)
 			kbe_snprintf(db_item_names_[i], MAX_BUF, TABLE_ITEM_PERFIX"_%d_%s%s", i, exstrFlag, itemName());
 	}
 
@@ -362,7 +362,7 @@ public:
 
 	virtual void init_db_item_name(const char* exstrFlag = "")
 	{
-		for(int i=0; i<4; i++)
+		for(int i=0; i<4; ++i)
 			kbe_snprintf(db_item_names_[i], MAX_BUF, TABLE_ITEM_PERFIX"_%d_%s%s", i, exstrFlag, itemName());
 	}
 
@@ -552,4 +552,4 @@ protected:
 #ifdef CODE_INLINE
 #include "entity_table_mysql.inl"
 #endif
-#endif // KBE_ENTITY_TABLE_MYSQL_HPP
+#endif // KBE_ENTITY_TABLE_MYSQL_H

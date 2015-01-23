@@ -27,7 +27,8 @@ numEntities_(0),
 load_(0.f),
 isDestroyed_(false),
 watchers_(),
-spaces_()
+spaces_(),
+initProgress_(0.f)
 {
 }
 

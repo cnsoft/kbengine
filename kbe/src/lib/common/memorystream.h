@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_MEMORYSTREAM_HPP
-#define KBE_MEMORYSTREAM_HPP
+#ifndef KBE_MEMORYSTREAM_H
+#define KBE_MEMORYSTREAM_H
 // common include	
 #include <iostream>
 #include <vector>
@@ -507,7 +507,7 @@ public:
 	size_t length()const { return rpos() >= wpos() ? 0 : wpos() - rpos(); }
 
 	// 剩余可填充的大小
-	virtual size_t space() const { return size() - wpos(); }
+	virtual size_t space() const { return wpos() >= size() ? 0 : size() - wpos(); }
 
 	// 将读索引强制设置到写索引，表示操作结束
 	void done(){ read_skip(length()); }

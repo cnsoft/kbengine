@@ -50,8 +50,9 @@ clients_()
 	if (pEndPoint_->bind(htons(g_kbeSrvConfig.getLoginApp().http_cbport), 
 		Loginapp::getSingleton().networkInterface().extaddr().ip) == -1)
 	{
-		ERROR_MSG(fmt::format("HTTPCBHandler::bind({}): \n",
-			 kbe_strerror()));
+		ERROR_MSG(fmt::format("HTTPCBHandler::bind({}): {}:{}\n",
+			 kbe_strerror(), inet_ntoa((struct in_addr&)Loginapp::getSingleton().networkInterface().extaddr().ip),
+			g_kbeSrvConfig.getLoginApp().http_cbport));
 
 		pEndPoint_->close();
 		return;
@@ -59,8 +60,9 @@ clients_()
 
 	if(pEndPoint_->listen() == -1)
 	{
-		ERROR_MSG(fmt::format("HTTPCBHandler::listeningSocket({}): \n",
-			 kbe_strerror()));
+		ERROR_MSG(fmt::format("HTTPCBHandler::listeningSocket({}): {}:{}\n",
+			 kbe_strerror(), inet_ntoa((struct in_addr&)Loginapp::getSingleton().networkInterface().extaddr().ip),
+			g_kbeSrvConfig.getLoginApp().http_cbport));
 
 		pEndPoint_->close();
 		return;
@@ -68,7 +70,7 @@ clients_()
 
 	pEndPoint_->setnonblocking(true);
 
-	Loginapp::getSingleton().networkInterface().dispatcher().registerFileDescriptor(*pEndPoint_, this);
+	Loginapp::getSingleton().networkInterface().dispatcher().registerReadFileDescriptor(*pEndPoint_, this);
 
 	INFO_MSG(fmt::format("HTTPCBHandler::bind: {}:{}\n",
 		inet_ntoa((struct in_addr&)Loginapp::getSingleton().networkInterface().extaddr().ip),
@@ -79,7 +81,7 @@ clients_()
 HTTPCBHandler::~HTTPCBHandler()
 {
 	clients_.clear();
-	Loginapp::getSingleton().networkInterface().dispatcher().deregisterFileDescriptor(*pEndPoint_);
+	Loginapp::getSingleton().networkInterface().dispatcher().deregisterReadFileDescriptor(*pEndPoint_);
 	SAFE_RELEASE(pEndPoint_);
 }
 
@@ -106,7 +108,7 @@ int HTTPCBHandler::handleInputNotification(int fd)
 		CLIENT& client = clients_[*newclient];
 		client.endpoint = KBEShared_ptr< Network::EndPoint >(newclient);
 		client.state = 0;
-		Loginapp::getSingleton().networkInterface().dispatcher().registerFileDescriptor(*newclient, this);
+		Loginapp::getSingleton().networkInterface().dispatcher().registerReadFileDescriptor(*newclient, this);
 	}
 	else
 	{
@@ -131,7 +133,7 @@ int HTTPCBHandler::handleInputNotification(int fd)
 		
 			if(len == 0)
 			{
-				Loginapp::getSingleton().networkInterface().dispatcher().deregisterFileDescriptor(*newclient);
+				Loginapp::getSingleton().networkInterface().dispatcher().deregisterReadFileDescriptor(*newclient);
 				clients_.erase(iter);
 			}
 			return 0;
@@ -139,7 +141,7 @@ int HTTPCBHandler::handleInputNotification(int fd)
 
 		if(client.state == 1)
 		{
-			Loginapp::getSingleton().networkInterface().dispatcher().deregisterFileDescriptor(*newclient);
+			Loginapp::getSingleton().networkInterface().dispatcher().deregisterReadFileDescriptor(*newclient);
 			clients_.erase(iter);
 		}
 
@@ -154,7 +156,7 @@ int HTTPCBHandler::handleInputNotification(int fd)
 			{
 				std::string response = "<?xml version='1.0'?><cross-domain-policy><allow-access-from domain=""*"" to-ports=""*"" /></cross-domain-policy>";
 				iter->second.endpoint->send(response.c_str(), response.size());
-				Loginapp::getSingleton().networkInterface().dispatcher().deregisterFileDescriptor(*newclient);
+				Loginapp::getSingleton().networkInterface().dispatcher().deregisterReadFileDescriptor(*newclient);
 				clients_.erase(iter);
 			}
 
@@ -231,10 +233,10 @@ int HTTPCBHandler::handleInputNotification(int fd)
 			if(type == 1)
 			{
 				// 向dbmgr激活账号
-				Network::Bundle bundle;
-				bundle.newMessage(DbmgrInterface::accountActivate);
-				bundle << code;
-				bundle.send(Loginapp::getSingleton().networkInterface(), dbmgrinfos->pChannel);
+				Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+				(*pBundle).newMessage(DbmgrInterface::accountActivate);
+				(*pBundle) << code;
+				dbmgrinfos->pChannel->send(pBundle);
 
 				hellomessage = g_kbeSrvConfig.emailAtivationInfo_.backlink_hello_message;
 			}
@@ -278,12 +280,12 @@ int HTTPCBHandler::handleInputNotification(int fd)
 					password = HttpUtility::URLDecode(password);
 
 					// 向dbmgr重置账号
-					Network::Bundle bundle;
-					bundle.newMessage(DbmgrInterface::accountResetPassword);
-					bundle << KBEngine::strutil::kbe_trim(username);
-					bundle << KBEngine::strutil::kbe_trim(password);
-					bundle << code;
-					bundle.send(Loginapp::getSingleton().networkInterface(), dbmgrinfos->pChannel);
+					Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+					(*pBundle).newMessage(DbmgrInterface::accountResetPassword);
+					(*pBundle) << KBEngine::strutil::kbe_trim(username);
+					(*pBundle) << KBEngine::strutil::kbe_trim(password);
+					(*pBundle) << code;
+					dbmgrinfos->pChannel->send(pBundle);
 				}
 
 				hellomessage = g_kbeSrvConfig.emailResetPasswordInfo_.backlink_hello_message;
@@ -309,11 +311,11 @@ int HTTPCBHandler::handleInputNotification(int fd)
 					username = HttpUtility::URLDecode(username);
 
 					// 向dbmgr重置账号
-					Network::Bundle bundle;
-					bundle.newMessage(DbmgrInterface::accountBindMail);
-					bundle << KBEngine::strutil::kbe_trim(username);
-					bundle << code;
-					bundle.send(Loginapp::getSingleton().networkInterface(), dbmgrinfos->pChannel);
+					Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
+					(*pBundle).newMessage(DbmgrInterface::accountBindMail);
+					(*pBundle) << KBEngine::strutil::kbe_trim(username);
+					(*pBundle) << code;
+					dbmgrinfos->pChannel->send(pBundle);
 				}
 
 				hellomessage = g_kbeSrvConfig.emailBindInfo_.backlink_hello_message;
@@ -341,7 +343,7 @@ int HTTPCBHandler::handleInputNotification(int fd)
 		{
 			if(client.state != 2)
 			{
-				Loginapp::getSingleton().networkInterface().dispatcher().deregisterFileDescriptor(*newclient);
+				Loginapp::getSingleton().networkInterface().dispatcher().deregisterReadFileDescriptor(*newclient);
 				clients_.erase(iter);
 			}
 		}
@@ -354,7 +356,7 @@ int HTTPCBHandler::handleInputNotification(int fd)
 void HTTPCBHandler::onAccountActivated(std::string& code, bool success)
 {
 	std::map< int, CLIENT >::iterator iter = clients_.begin();
-	for(; iter != clients_.end(); iter++)
+	for(; iter != clients_.end(); ++iter)
 	{
 		if(iter->second.code == code)
 		{
@@ -380,7 +382,7 @@ void HTTPCBHandler::onAccountActivated(std::string& code, bool success)
 void HTTPCBHandler::onAccountBindedEmail(std::string& code, bool success)
 {
 	std::map< int, CLIENT >::iterator iter = clients_.begin();
-	for(; iter != clients_.end(); iter++)
+	for(; iter != clients_.end(); ++iter)
 	{
 		if(iter->second.code == code)
 		{
@@ -406,7 +408,7 @@ void HTTPCBHandler::onAccountBindedEmail(std::string& code, bool success)
 void HTTPCBHandler::onAccountResetPassword(std::string& code, bool success)
 {
 	std::map< int, CLIENT >::iterator iter = clients_.begin();
-	for(; iter != clients_.end(); iter++)
+	for(; iter != clients_.end(); ++iter)
 	{
 		if(iter->second.code == code)
 		{

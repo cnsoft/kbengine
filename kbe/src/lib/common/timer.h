@@ -17,8 +17,8 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
-#ifndef KBE_TIMER_HPP
-#define KBE_TIMER_HPP
+#ifndef KBE_TIMER_H
+#define KBE_TIMER_H
 
 #include "common/common.h"
 #include "common/timestamp.h"
@@ -143,9 +143,6 @@ public:
 	TimerHandle	add(TimeStamp startTime, TimeStamp interval,
 						TimerHandler* pHandler, void * pUser);
 	
-	TIME_STAMP timerDeliveryTime(TimerHandle handle) const;
-	TIME_STAMP timerIntervalTime(TimerHandle handle) const;
-	TIME_STAMP& timerIntervalTime(TimerHandle handle);
 private:
 	
 	typedef std::vector<KBEngine::TimeBase *> Container;
@@ -162,9 +159,6 @@ private:
 
 		TIME_STAMP time() const			{ return time_; }
 		TIME_STAMP interval() const		{ return interval_; }
-		TIME_STAMP &intervalRef()		{ return interval_; }
-
-		TIME_STAMP deliveryTime() const;
 
 		void triggerTimer();
 
@@ -220,7 +214,7 @@ private:
 
 		Container & container()		{ return container_; }
 
-		void heapify()
+		void make_heap()
 		{
 			std::make_heap( container_.begin(), container_.end(),
 					Comparator() );
@@ -247,4 +241,4 @@ typedef TimersT<uint64> Timers64;
 #ifdef CODE_INLINE
 #include "timer.inl"
 #endif
-#endif // KBE_TIMER_HPP
+#endif // KBE_TIMER_H

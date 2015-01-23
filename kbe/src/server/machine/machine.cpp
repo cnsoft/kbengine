@@ -36,8 +36,8 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 #include "../cellapp/cellapp_interface.h"
 #include "../dbmgr/dbmgr_interface.h"
 #include "../loginapp/loginapp_interface.h"
-#include "../tools/message_log/messagelog_interface.h"
-#include "../../server/tools/billing_system/billingsystem_interface.h"
+#include "../tools/logger/logger_interface.h"
+#include "../../server/tools/interfaces/interfaces_interface.h"
 #include "../../server/tools/bots/bots_interface.h"
 
 namespace KBEngine{
@@ -87,18 +87,18 @@ void Machine::onBroadcastInterface(Network::Channel* pChannel, int32 uid, std::s
 {
 	// 先查询一下是否存在相同身份，如果是相同身份且不是一个进程我们需要告知对方启动非法
 	const Components::ComponentInfos* pinfos = Components::getSingleton().findComponent(componentID);
-	if(pinfos && isGameServerComponentType((COMPONENT_TYPE)componentType) && checkComponentUsable(pinfos, true))
+	if(pinfos && isGameServerComponentType((COMPONENT_TYPE)componentType) && checkComponentUsable(pinfos, false, true))
 	{
 		if(pinfos->pid != pid || pinfos->pIntAddr->ip != intaddr ||
 			username != pinfos->username || uid != pinfos->uid)
 		{
-			Network::Bundle bundle;
+			Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 
-			MachineInterface::onBroadcastInterfaceArgs24::staticAddToBundle(bundle, pinfos->uid,
+			MachineInterface::onBroadcastInterfaceArgs24::staticAddToBundle((*pBundle), pinfos->uid,
 				pinfos->username, pinfos->componentType, pinfos->cid, componentIDEx, pinfos->globalOrderid, pinfos->groupOrderid, 
 				pinfos->pIntAddr->ip, pinfos->pIntAddr->port,
 				pinfos->pExtAddr->ip, pinfos->pExtAddr->port, pinfos->externalAddressEx, pinfos->pid, pinfos->cpu, pinfos->mem, pinfos->usedmem, 
-				pinfos->shutdownState, KBEngine::getProcessPID(), pinfos->extradata, pinfos->extradata1, pinfos->extradata2, pinfos->extradata3, 0, 0);
+				(int8)pinfos->state, KBEngine::getProcessPID(), pinfos->extradata, pinfos->extradata1, pinfos->extradata2, pinfos->extradata3, 0, 0);
 
 			if(backRecvAddr != 0 && backRecvPort != 0)
 			{
@@ -111,11 +111,12 @@ void Machine::onBroadcastInterface(Network::Channel* pChannel, int32 uid, std::s
 					return;
 				}
 
-				bundle.sendto(ep, backRecvPort, backRecvAddr);
+				Network::Channel::sendto(ep, pBundle, backRecvPort, backRecvAddr);
+				Network::Bundle::ObjPool().reclaimObject(pBundle);
 			}
 			else
 			{
-				bundle.send(this->networkInterface(), pChannel);
+				pChannel->send(pBundle);
 			}
 
 			return;
@@ -129,7 +130,7 @@ void Machine::onBroadcastInterface(Network::Channel* pChannel, int32 uid, std::s
 		pinfos = Components::getSingleton().findComponent((COMPONENT_TYPE)componentType, uid, componentID);
 		if(pinfos)
 		{
-			if(checkComponentUsable(pinfos, true))
+			if(checkComponentUsable(pinfos, false, true))
 			{
 				WARNING_MSG(fmt::format("Machine::onBroadcastInterface: {} has running, pid={}, uid={}!\n", 
 					COMPONENT_NAME_EX((COMPONENT_TYPE)componentType), pid, uid));
@@ -141,7 +142,7 @@ void Machine::onBroadcastInterface(Network::Channel* pChannel, int32 uid, std::s
 		// 一台硬件上只能存在一个machine
 		if(componentType == MACHINE_TYPE)
 		{
-			WARNING_MSG("Machine::onBroadcastInterface: kbmachine has running!\n");
+			WARNING_MSG("Machine::onBroadcastInterface: machine has running!\n");
 			return;
 		}
 	
@@ -209,7 +210,7 @@ void Machine::onFindInterfaceAddr(Network::Channel* pChannel, int32 uid, std::st
 	Components::COMPONENTS::iterator iter = components.begin();
 
 	bool found = false;
-	Network::Bundle bundle;
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 
 	for(; iter != components.end(); )
 	{
@@ -224,7 +225,7 @@ void Machine::onFindInterfaceAddr(Network::Channel* pChannel, int32 uid, std::st
 
 		const Components::ComponentInfos* pinfos = &(*iter);
 		
-		bool usable = checkComponentUsable(pinfos, false);
+		bool usable = checkComponentUsable(pinfos, false, false);
 
 		if(usable)
 		{
@@ -233,11 +234,11 @@ void Machine::onFindInterfaceAddr(Network::Channel* pChannel, int32 uid, std::st
 			{
 				found = true;
 
-				MachineInterface::onBroadcastInterfaceArgs24::staticAddToBundle(bundle, pinfos->uid, 
+				MachineInterface::onBroadcastInterfaceArgs24::staticAddToBundle((*pBundle), pinfos->uid, 
 					pinfos->username, findComponentType, pinfos->cid, componentID, pinfos->globalOrderid, pinfos->groupOrderid, 
 					pinfos->pIntAddr->ip, pinfos->pIntAddr->port,
 					pinfos->pExtAddr->ip, pinfos->pExtAddr->port, pinfos->externalAddressEx, pinfos->pid, pinfos->cpu, pinfos->mem, pinfos->usedmem, 
-					pinfos->shutdownState, KBEngine::getProcessPID(), pinfos->extradata, pinfos->extradata1, pinfos->extradata2, pinfos->extradata3, 0, 0);
+					(int8)pinfos->state, KBEngine::getProcessPID(), pinfos->extradata, pinfos->extradata1, pinfos->extradata2, pinfos->extradata3, 0, 0);
 			}
 
 			++iter;
@@ -268,20 +269,30 @@ void Machine::onFindInterfaceAddr(Network::Channel* pChannel, int32 uid, std::st
 			COMPONENT_NAME_EX(tComponentType),
 			COMPONENT_NAME_EX(tfindComponentType)));
 
-		MachineInterface::onBroadcastInterfaceArgs24::staticAddToBundle(bundle, KBEngine::getUserUID(), 
+		MachineInterface::onBroadcastInterfaceArgs24::staticAddToBundle((*pBundle), KBEngine::getUserUID(), 
 			"", UNKNOWN_COMPONENT_TYPE, 0, componentID, -1, -1, 0, 0, 0, 0, "", 0, 0.f, 0.f, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 	}
 
 	if(finderAddr != 0 && finderRecvPort != 0)
-		bundle.sendto(ep, finderRecvPort, finderAddr);
+	{
+		Network::Channel::sendto(ep, pBundle, finderRecvPort, finderAddr);
+		Network::Bundle::ObjPool().reclaimObject(pBundle);
+	}
 	else
-		bundle.send(this->networkInterface(), pChannel);
+	{
+		pChannel->send(pBundle);
+	}
 }
 
 //-------------------------------------------------------------------------------------
-bool Machine::checkComponentUsable(const Components::ComponentInfos* info, bool autoerase)
+bool Machine::checkComponentUsable(const Components::ComponentInfos* info, bool getdatas, bool autoerase)
 {
-	bool ret = Components::getSingleton().lookupLocalComponentRunning(info->pid) != NULL;
+	bool ret = false;
+	
+	if(!getdatas)
+		ret = Components::getSingleton().lookupLocalComponentRunning(info->pid) != NULL;
+	else
+		ret = Components::getSingleton().updateComponentInfos(info);
 
 	// 如果已经不可用且允许自动擦除则擦除它
 	if(!ret && autoerase)
@@ -316,14 +327,14 @@ void Machine::onQueryAllInterfaceInfos(Network::Channel* pChannel, int32 uid, st
 	}
 
 	{
-		Network::Bundle bundle;
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 		
 		uint64 cidex = 0;
 		float cpu = SystemInfo::getSingleton().getCPUPer();
 		uint64 totalmem = SystemInfo::getSingleton().getMemInfos().total;
 		uint64 totalusedmem = SystemInfo::getSingleton().getMemInfos().used;
 
-		MachineInterface::onBroadcastInterfaceArgs24::staticAddToBundle(bundle, getUserUID(), getUsername(), 
+		MachineInterface::onBroadcastInterfaceArgs24::staticAddToBundle((*pBundle), getUserUID(), getUsername(), 
 			g_componentType, g_componentID, cidex, g_componentGlobalOrder, g_componentGroupOrder,
 			networkInterface_.intaddr().ip, networkInterface_.intaddr().port,
 			networkInterface_.extaddr().ip, networkInterface_.extaddr().port, "", getProcessPID(),
@@ -331,17 +342,20 @@ void Machine::onQueryAllInterfaceInfos(Network::Channel* pChannel, int32 uid, st
 			getProcessPID(), totalmem, totalusedmem, uint64(SystemInfo::getSingleton().getCPUPerByPID() * 100), 0, 0, 0);
 
 		if(finderRecvPort != 0)
-			bundle.sendto(ep, finderRecvPort, pChannel->addr().ip);
+		{
+			Network::Channel::sendto(ep, pBundle, finderRecvPort, pChannel->addr().ip);
+			Network::Bundle::ObjPool().reclaimObject(pBundle);
+		}
 		else
-			bundle.send(this->networkInterface(), pChannel);
+		{
+			pChannel->send(pBundle);
+		}
 	}
 
 	int i = 0;
 
 	while(ALL_SERVER_COMPONENT_TYPES[i] != UNKNOWN_COMPONENT_TYPE)
 	{
-		Network::Bundle bundle;
-
 		COMPONENT_TYPE findComponentType = ALL_SERVER_COMPONENT_TYPES[i++];
 		Components::COMPONENTS& components = Components::getSingleton().getComponents(findComponentType);
 		Components::COMPONENTS::iterator iter = components.begin();
@@ -359,25 +373,30 @@ void Machine::onQueryAllInterfaceInfos(Network::Channel* pChannel, int32 uid, st
 			bool islocal = ep_.addr().ip == pinfos->pIntAddr->ip || this->networkInterface().intaddr().ip == pinfos->pIntAddr->ip ||
 					this->networkInterface().extaddr().ip == pinfos->pIntAddr->ip;
 
-			bool usable = checkComponentUsable(pinfos, false);
+			bool usable = checkComponentUsable(pinfos, true, false);
 
 			if(usable)
 			{
 				if(islocal)
 				{
-					Network::Bundle bundle;
+					Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 					
-					MachineInterface::onBroadcastInterfaceArgs24::staticAddToBundle(bundle, pinfos->uid, 
+					MachineInterface::onBroadcastInterfaceArgs24::staticAddToBundle((*pBundle), pinfos->uid, 
 						pinfos->username, findComponentType, pinfos->cid, pinfos->cid, pinfos->globalOrderid, pinfos->groupOrderid, 
 						pinfos->pIntAddr->ip, pinfos->pIntAddr->port,
 						pinfos->pExtAddr->ip, pinfos->pExtAddr->port, pinfos->externalAddressEx, pinfos->pid, 
 						pinfos->cpu, pinfos->mem, pinfos->usedmem, 
-						pinfos->shutdownState, KBEngine::getProcessPID(), pinfos->extradata, pinfos->extradata1, pinfos->extradata2, pinfos->extradata3, 0, 0);
+						(int8)pinfos->state, KBEngine::getProcessPID(), pinfos->extradata, pinfos->extradata1, pinfos->extradata2, pinfos->extradata3, 0, 0);
 
 					if(finderRecvPort != 0)
-						bundle.sendto(ep, finderRecvPort, pChannel->addr().ip);
+					{
+						Network::Channel::sendto(ep, pBundle, finderRecvPort, pChannel->addr().ip);
+						Network::Bundle::ObjPool().reclaimObject(pBundle);
+					}
 					else
-						bundle.send(this->networkInterface(), pChannel);
+					{
+						pChannel->send(pBundle);
+					}
 				}
 
 				++iter;
@@ -443,7 +462,7 @@ bool Machine::findBroadcastInterface()
 	
 	std::string sinterface = "\t[";
 	std::map< u_int32_t, std::string >::iterator iter = interfaces.begin();
-	for(; iter != interfaces.end(); iter++)
+	for(; iter != interfaces.end(); ++iter)
 	{
 		sinterface += inet_ntoa((struct in_addr&)iter->first);
 		sinterface += ", ";
@@ -496,9 +515,9 @@ bool Machine::initNetwork()
 	ep_.addr(address);
 	pEPPacketReceiver_ = new Network::UDPPacketReceiver(ep_, this->networkInterface());
 
-	if(!this->mainDispatcher().registerFileDescriptor(ep_, pEPPacketReceiver_))
+	if(!this->dispatcher().registerReadFileDescriptor(ep_, pEPPacketReceiver_))
 	{
-		ERROR_MSG("Machine::initNetwork: registerFileDescriptor ep is failed!\n");
+		ERROR_MSG("Machine::initNetwork: registerReadFileDescriptor ep is failed!\n");
 		return false;
 	}
 	
@@ -528,9 +547,9 @@ bool Machine::initNetwork()
 		epBroadcast_.addr(address);
 		pEBPacketReceiver_ = new Network::UDPPacketReceiver(epBroadcast_, this->networkInterface());
 	
-		if(!this->mainDispatcher().registerFileDescriptor(epBroadcast_, pEBPacketReceiver_))
+		if(!this->dispatcher().registerReadFileDescriptor(epBroadcast_, pEBPacketReceiver_))
 		{
-			ERROR_MSG("Machine::initNetwork: registerFileDescriptor epBroadcast is failed!\n");
+			ERROR_MSG("Machine::initNetwork: registerReadFileDescriptor epBroadcast is failed!\n");
 			return false;
 		}
 
@@ -551,9 +570,9 @@ bool Machine::initNetwork()
 	epLocal_.addr(address);
 	pEPLocalPacketReceiver_ = new Network::UDPPacketReceiver(epLocal_, this->networkInterface());
 
-	if(!this->mainDispatcher().registerFileDescriptor(epLocal_, pEPLocalPacketReceiver_))
+	if(!this->dispatcher().registerReadFileDescriptor(epLocal_, pEPLocalPacketReceiver_))
 	{
-		ERROR_MSG("Machine::initNetwork: registerFileDescriptor epLocal is failed!\n");
+		ERROR_MSG("Machine::initNetwork: registerReadFileDescriptor epLocal is failed!\n");
 		return false;
 	}
 
@@ -566,10 +585,10 @@ bool Machine::run()
 {
 	bool ret = true;
 
-	while(!this->mainDispatcher().isBreakProcessing())
+	while(!this->dispatcher().hasBreakProcessing())
 	{
 		threadPool_.onMainThreadTick();
-		this->mainDispatcher().processOnce(false);
+		this->dispatcher().processOnce(false);
 		networkInterface().processAllChannelPackets(&MachineInterface::messageHandlers);
 		KBEngine::sleep(100);
 	};
@@ -617,7 +636,7 @@ void Machine::startserver(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 	int32 uid = 0;
 	COMPONENT_TYPE componentType;
 
-	Network::Bundle bundle;
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 	bool success = true;
 
 	uint16 finderRecvPort = 0;
@@ -674,7 +693,7 @@ void Machine::startserver(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 #else
 #endif
 	
-	bundle << success;
+	(*pBundle) << success;
 
 	if(finderRecvPort != 0)
 	{
@@ -687,11 +706,12 @@ void Machine::startserver(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 			return;
 		}
 	
-		bundle.sendto(ep, htons(finderRecvPort), pChannel->addr().ip);
+		Network::Channel::sendto(ep, pBundle, htons(finderRecvPort), pChannel->addr().ip);
+		Network::Bundle::ObjPool().reclaimObject(pBundle);
 	}
 	else
 	{
-		bundle.send(this->networkInterface(), pChannel);
+		pChannel->send(pBundle);
 	}
 }
 
@@ -700,7 +720,7 @@ void Machine::stopserver(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 {
 	int32 uid = 0;
 	COMPONENT_TYPE componentType;
-	Network::Bundle bundle;
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 	bool success = true;
 
 	uint16 finderRecvPort = 0;
@@ -747,7 +767,7 @@ void Machine::stopserver(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 		INFO_MSG(fmt::format("--> stop {}({}), addr={}\n", 
 			(*iter).cid, COMPONENT_NAME[componentType], (cinfos->pIntAddr != NULL ? cinfos->pIntAddr->c_str() : "unknown")));
 
-		bool usable = checkComponentUsable(&(*iter), false);
+		bool usable = checkComponentUsable(&(*iter), false, false);
 		
 		if(!usable)
 		{
@@ -785,7 +805,8 @@ void Machine::stopserver(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 		}
 
 		ep1.setnonblocking(false);
-		closebundle.send(ep1);
+		Network::Channel::send(ep1, &closebundle);
+
 		Network::TCPPacket recvpacket;
 		recvpacket.resize(255);
 		int len = ep1.recv(recvpacket.data(), 1);
@@ -799,7 +820,7 @@ void Machine::stopserver(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 		break;
 	}
 
-	bundle << success;
+	(*pBundle) << success;
 
 	if(finderRecvPort != 0)
 	{
@@ -812,11 +833,12 @@ void Machine::stopserver(Network::Channel* pChannel, KBEngine::MemoryStream& s)
 			return;
 		}
 	
-		bundle.sendto(ep, finderRecvPort, pChannel->addr().ip);
+		Network::Channel::sendto(ep, pBundle, finderRecvPort, pChannel->addr().ip);
+		Network::Bundle::ObjPool().reclaimObject(pBundle);
 	}
 	else
 	{
-		bundle.send(this->networkInterface(), pChannel);
+		pChannel->send(pBundle);
 	}
 }
 

@@ -1,10 +1,10 @@
 BIN  = dbmgr
 SRCS =						\
-	billinghandler				\
+	buffered_dbtasks			\
 	dbmgr					\
 	dbmgr_interface				\
 	dbtasks					\
-	buffered_dbtasks			\
+	interfaces_handler			\
 	main					\
 	sync_app_datas_handler
 

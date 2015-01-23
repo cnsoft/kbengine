@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_PLATFORM_HPP
-#define KBE_PLATFORM_HPP
+#ifndef KBE_PLATFORM_H
+#define KBE_PLATFORM_H
 
 // common include	
 #include <stdio.h>
@@ -111,12 +111,14 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 #endif
 
 /** 定义引擎名字空间 */
-namespace KBEngine{ 
+namespace KBEngine
+{ 
+
 /** 定义引擎字节序 */
 #define KBENGINE_LITTLE_ENDIAN							0
 #define KBENGINE_BIG_ENDIAN								1
 #if !defined(KBENGINE_ENDIAN)
-#  if defined (ACE_BIG_ENDIAN)
+#  if defined (USE_BIG_ENDIAN)
 #    define KBENGINE_ENDIAN KBENGINE_BIG_ENDIAN
 #  else 
 #    define KBENGINE_ENDIAN KBENGINE_LITTLE_ENDIAN
@@ -148,6 +150,7 @@ namespace KBEngine{
 #define COMPILER_GNU	   1
 #define COMPILER_BORLAND   2
 #define COMPILER_INTEL     3
+#define COMPILER_CLANG     4
 
 #ifdef _MSC_VER
 #  define KBE_COMPILER COMPILER_MICROSOFT
@@ -157,6 +160,9 @@ namespace KBEngine{
 #  define KBE_COMPILER COMPILER_BORLAND
 #elif defined( __GNUC__ )
 #  define KBE_COMPILER COMPILER_GNU
+#elif defined( __clang__ )
+#  define KBE_COMPILER COMPILER_CLANG
+	
 #else
 #  pragma error "FATAL ERROR: Unknown compiler."
 #endif
@@ -539,23 +545,30 @@ inline int kbe_lasterror()
 /** 获取用户UID */
 inline int32 getUserUID()
 {
-#if KBE_PLATFORM == PLATFORM_WIN32
-	// VS2005:
-	#if _MSC_VER >= 1400
-		char uid[16];
-		size_t sz;
-		return getenv_s( &sz, uid, sizeof( uid ), "UID" ) == 0 ? atoi( uid ) : 0;
+	static int32 iuid = 0;
 
-	// VS2003:
-	#elif _MSC_VER < 1400
-		char * uid = getenv( "UID" );
-		return uid ? atoi( uid ) : 0;
-	#endif
+	if(iuid == 0)
+	{
+#if KBE_PLATFORM == PLATFORM_WIN32
+		// VS2005:
+		#if _MSC_VER >= 1400
+			char uid[16];
+			size_t sz;
+			iuid = getenv_s( &sz, uid, sizeof( uid ), "UID" ) == 0 ? atoi( uid ) : 0;
+
+		// VS2003:
+		#elif _MSC_VER < 1400
+			char * uid = getenv( "UID" );
+			iuid = uid ? atoi( uid ) : 0;
+		#endif
 #else
-// Linux:
-	char * uid = getenv( "UID" );
-	return uid ? atoi( uid ) : getuid();
+	// Linux:
+		char * uid = getenv( "UID" );
+		iuid = uid ? atoi( uid ) : getuid();
 #endif
+	}
+
+	return iuid;
 }
 
 /** 获取用户名 */
@@ -618,7 +631,7 @@ extern COMPONENT_ORDER g_componentGroupOrder;
 inline uint64 genUUID64()
 {
 	static uint64 tv = (uint64)getSystemTime();
-	static uint32 lastNum = 0;
+	static uint16 lastNum = 0;
 	
 	uint64 now = (uint64)getSystemTime();	
 	if(now != tv)
@@ -629,26 +642,26 @@ inline uint64 genUUID64()
 	
 	if(g_componentGlobalOrder <= 0)
 	{
-		// 16位随机数， 时间戳32位， 16位迭代数
-		static uint64 rnd = 0;
+		// 时间戳32位， 随机数16位，16位迭代数（最大为65535-1）
+		static uint32 rnd = 0;
 		if(rnd == 0)
 		{
 			srand(getSystemTime());
-			rnd = ((uint64)rand() % 65535) + 1;
+			rnd = (uint32)(rand() << 16);
 		}
 		
-		assert(lastNum < 65536 && "genUUID64(): overflow!");
+		assert(lastNum < 65535 && "genUUID64(): overflow!");
 		
-		return (rnd << 48) + (tv << 16) + lastNum++;
+		return (tv << 32) | rnd | lastNum++;
 	}
 	else
 	{
-		// app顺序数8位，时间戳32位， 24位迭代数（16777216：24位最大数+1）
-		static uint64 appOrder = g_componentGlobalOrder;
+		// 时间戳32位， app顺序数16位，16位迭代数（最大为65535-1）
+		static uint32 appOrder = g_componentGlobalOrder << 16;
 		
-		assert(lastNum < 16777216 && "genUUID64(): overflow!");
+		assert(lastNum < 65535 && "genUUID64(): overflow!");
 		
-		return (appOrder << 56) + (tv << 24) + lastNum++;
+		return (tv << 32) | appOrder | lastNum++;
 	}
 }
 
@@ -675,5 +688,15 @@ inline bool isPlatformLittleEndian()
    return *((char*)&n)? true:false;
 }
 
+/** 设置环境变量 */
+#if KBE_PLATFORM == PLATFORM_WIN32
+	inline void setenv(const std::string& name, const std::string& value, int overwrite)
+	{
+		_putenv((name + "=" + value).c_str());
+	}
+#else
+	// Linux下面直接使用setenv
+#endif
+
 }
-#endif // KBE_PLATFORM_HPP
+#endif // KBE_PLATFORM_H

@@ -18,8 +18,8 @@ You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef KBE_ENTITIES_HPP
-#define KBE_ENTITIES_HPP
+#ifndef KBE_ENTITIES_H
+#define KBE_ENTITIES_H
 	
 // common include	
 #include "helper/debug_helper.h"
@@ -316,7 +316,7 @@ void Entities<T>::clear(bool callScript, std::vector<ENTITY_ID> excludes)
 	{
 		if(std::find(excludes.begin(), excludes.end(), iter->first) != excludes.end())
 		{
-			iter++;
+			++iter;
 			continue;
 		}
 
@@ -371,5 +371,5 @@ PyObject* Entities<T>::pyGarbages()
 }
 
 }
-#endif // KBE_ENTITIES_HPP
+#endif // KBE_ENTITIES_H
 

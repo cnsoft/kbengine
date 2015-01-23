@@ -17,8 +17,8 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 */
-#ifndef KBE_COMMON_HPP
-#define KBE_COMMON_HPP
+#ifndef KBE_COMMON_H
+#define KBE_COMMON_H
 #include "common/platform.h"
 #include "common/singleton.h"
 #include "common/kbeversion.h"
@@ -91,6 +91,25 @@ const char ENTITY_MAILBOX_TYPE_TO_NAME_TABLE[][8] =
 	"client",
 };
 
+/** 定义服务器各组件状态 */
+enum COMPONENT_STATE
+{
+	// 初始状态
+	COMPONENT_STATE_INIT = 0,
+
+	// 进程正在运行中
+	COMPONENT_STATE_RUN = 1,
+
+	// 进程开始关闭
+	COMPONENT_STATE_SHUTTINGDOWN_BEGIN = 2,
+
+	// 进程正在关闭
+	COMPONENT_STATE_SHUTTINGDOWN_RUNNING = 3,
+
+	// 进程关闭完成了
+	COMPONENT_STATE_STOP = 4
+};
+
 /** 定义服务器各组件类别 */
 enum COMPONENT_TYPE
 {
@@ -104,10 +123,10 @@ enum COMPONENT_TYPE
 	CLIENT_TYPE				= 7,
 	MACHINE_TYPE			= 8,
 	CONSOLE_TYPE			= 9,
-	MESSAGELOG_TYPE			= 10,
+	LOGGER_TYPE				= 10,
 	BOTS_TYPE				= 11,
 	WATCHER_TYPE			= 12,
-	BILLING_TYPE			= 13,
+	INTERFACES_TYPE			= 13,
 	COMPONENT_END_TYPE		= 14,
 };
 
@@ -125,12 +144,12 @@ const char COMPONENT_NAME[][255] = {
 	"cellapp",
 	"baseapp",
 	"client",
-	"kbmachine",
+	"machine",
 	"console",
-	"messagelog",
+	"logger",
 	"bots",
 	"watcher",
-	"billing",
+	"interfaces",
 };
 
 const char COMPONENT_NAME_1[][255] = {
@@ -142,12 +161,12 @@ const char COMPONENT_NAME_1[][255] = {
 	"cellapp   ",
 	"baseapp   ",
 	"client    ",
-	"kbmachine ",
+	"machine   ",
 	"console   ",
-	"messagelog",
+	"logger    ",
 	"bots      ",
 	"watcher   ",
-	"billing   ",
+	"interfaces",
 };
 
 const char COMPONENT_NAME_2[][255] = {
@@ -159,12 +178,12 @@ const char COMPONENT_NAME_2[][255] = {
 	"   cellapp",
 	"   baseapp",
 	"    client",
-	" kbmachine",
+	"   machine",
 	"   console",
-	"messagelog",
+	"    logger",
 	"      bots",
 	"   watcher",
-	"   billing",
+	"interfaces",
 };
 
 inline const char* COMPONENT_NAME_EX(COMPONENT_TYPE CTYPE)
@@ -199,7 +218,7 @@ inline const char* COMPONENT_NAME_EX_2(COMPONENT_TYPE CTYPE)
 
 inline COMPONENT_TYPE ComponentName2ComponentType(const char* name)
 {
-	for(int i=0; i<(int)COMPONENT_END_TYPE; i++)
+	for(int i=0; i<(int)COMPONENT_END_TYPE; ++i)
 	{
 		if(kbe_stricmp(COMPONENT_NAME[i], name) == 0)
 			return (COMPONENT_TYPE)i;
@@ -210,20 +229,20 @@ inline COMPONENT_TYPE ComponentName2ComponentType(const char* name)
 
 // 所有的组件列表
 const COMPONENT_TYPE ALL_COMPONENT_TYPES[] = {BASEAPPMGR_TYPE, CELLAPPMGR_TYPE, DBMGR_TYPE, CELLAPP_TYPE, 
-						BASEAPP_TYPE, LOGINAPP_TYPE, MACHINE_TYPE, CONSOLE_TYPE, MESSAGELOG_TYPE, 
-						WATCHER_TYPE, BILLING_TYPE, BOTS_TYPE, UNKNOWN_COMPONENT_TYPE};
+						BASEAPP_TYPE, LOGINAPP_TYPE, MACHINE_TYPE, CONSOLE_TYPE, LOGGER_TYPE, 
+						WATCHER_TYPE, INTERFACES_TYPE, BOTS_TYPE, UNKNOWN_COMPONENT_TYPE};
 
 // 所有的后端组件列表
 const COMPONENT_TYPE ALL_SERVER_COMPONENT_TYPES[] = {BASEAPPMGR_TYPE, CELLAPPMGR_TYPE, DBMGR_TYPE, CELLAPP_TYPE, 
-						BASEAPP_TYPE, LOGINAPP_TYPE, MACHINE_TYPE, MESSAGELOG_TYPE, 
-						WATCHER_TYPE, BILLING_TYPE, BOTS_TYPE, UNKNOWN_COMPONENT_TYPE};
+						BASEAPP_TYPE, LOGINAPP_TYPE, MACHINE_TYPE, LOGGER_TYPE, 
+						WATCHER_TYPE, INTERFACES_TYPE, BOTS_TYPE, UNKNOWN_COMPONENT_TYPE};
 
 // 所有的后端组件列表
 const COMPONENT_TYPE ALL_GAME_SERVER_COMPONENT_TYPES[] = {BASEAPPMGR_TYPE, CELLAPPMGR_TYPE, DBMGR_TYPE, CELLAPP_TYPE, 
-						BASEAPP_TYPE, LOGINAPP_TYPE, BILLING_TYPE, UNKNOWN_COMPONENT_TYPE};
+						BASEAPP_TYPE, LOGINAPP_TYPE, INTERFACES_TYPE, UNKNOWN_COMPONENT_TYPE};
 
 // 所有的辅助性组件
-const COMPONENT_TYPE ALL_HELPER_COMPONENT_TYPE[] = {MESSAGELOG_TYPE, UNKNOWN_COMPONENT_TYPE};
+const COMPONENT_TYPE ALL_HELPER_COMPONENT_TYPE[] = {LOGGER_TYPE, UNKNOWN_COMPONENT_TYPE};
 
 // 返回是否是一个有效的组件
 #define VALID_COMPONENT(C_TYPE) ((C_TYPE) > 0 && (C_TYPE) < COMPONENT_END_TYPE)
@@ -306,7 +325,7 @@ inline bool validName(const char* name, int size)
 	if(size >= 256)
 		return false;
 
-	for(int i=0; i<size; i++)
+	for(int i=0; i<size; ++i)
 	{
 		char ch = name[i];
 		if((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || (ch == '_'))
@@ -384,4 +403,4 @@ inline bool email_isvalid(const char *address)
 }
 
 }
-#endif // KBE_COMMON_HPP
+#endif // KBE_COMMON_H

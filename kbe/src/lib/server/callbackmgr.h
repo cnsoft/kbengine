@@ -31,8 +31,8 @@ along with KBEngine.  If not, see <http://www.gnu.org/licenses/>.
 	CALLBACK_ID callbackID = callbackMgr.save(&xxx); // 可以使用bind来绑定一个类成员函数
 */
 
-#ifndef KBE_CALLBACKMGR_HPP
-#define KBE_CALLBACKMGR_HPP
+#ifndef KBE_CALLBACKMGR_H
+#define KBE_CALLBACKMGR_H
 
 // common include	
 #include "Python.h"
@@ -163,7 +163,7 @@ inline void CallbackMgr<PyObjectPtr>::addToStream(KBEngine::MemoryStream& s)
 	s << idAlloc_.lastID() << size;
 
 	CALLBACKS::iterator iter = cbMap_.begin();
-	for(; iter != cbMap_.end(); iter++)
+	for(; iter != cbMap_.end(); ++iter)
 	{
 		s << iter->first;
 		s.appendBlob(script::Pickler::pickle(iter->second.first.get()));
@@ -182,7 +182,7 @@ inline void CallbackMgr<PyObjectPtr>::createFromStream(KBEngine::MemoryStream& s
 	uint32 size;
 	s >> size;
 
-	for(uint32 i=0; i<size; i++)
+	for(uint32 i=0; i<size; ++i)
 	{
 		CALLBACK_ID cbID;
 		s >> cbID;
@@ -215,7 +215,7 @@ template<>
 inline void CallbackMgr<PyObject*>::finalise()
 {
 	std::map< CALLBACK_ID, std::pair< PyObject*, uint64 > >::iterator iter = cbMap_.begin();
-	for(; iter!= cbMap_.end(); iter++)
+	for(; iter!= cbMap_.end(); ++iter)
 	{
 		Py_DECREF(iter->second.first);
 	}
@@ -238,4 +238,4 @@ typedef CallbackMgr<PyObjectPtr> PY_CALLBACKMGR;
 
 }
 
-#endif // KBE_CALLBACKMGR_HPP
+#endif // KBE_CALLBACKMGR_H

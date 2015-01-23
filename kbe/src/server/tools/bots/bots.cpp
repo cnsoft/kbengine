@@ -76,7 +76,7 @@ Bots::~Bots()
 bool Bots::initialize()
 {
 	// 广播自己的地址给网上上的所有kbemachine
-	this->mainDispatcher().addFrequentTask(&Components::getSingleton());
+	this->dispatcher().addTask(&Components::getSingleton());
 	return ClientApp::initialize();
 }
 
@@ -89,7 +89,7 @@ bool Bots::initializeBegin()
 	Network::g_extReceiveWindowMessagesOverflow = 0;
 	Network::g_receiveWindowMessagesOverflowCritical = 0;
 
-	gameTimer_ = this->mainDispatcher().addTimer(1000000 / g_kbeSrvConfig.gameUpdateHertz(), this,
+	gameTimer_ = this->dispatcher().addTimer(1000000 / g_kbeSrvConfig.gameUpdateHertz(), this,
 							reinterpret_cast<void *>(TIMEOUT_GAME_TICK));
 
 	ProfileVal::setWarningPeriod(stampsPerSecond() / g_kbeSrvConfig.gameUpdateHertz());
@@ -99,7 +99,7 @@ bool Bots::initializeBegin()
 //-------------------------------------------------------------------------------------	
 bool Bots::initializeEnd()
 {
-	pTelnetServer_ = new TelnetServer(&mainDispatcher(), &networkInterface());
+	pTelnetServer_ = new TelnetServer(&dispatcher(), &networkInterface());
 	pTelnetServer_->pScript(&getScript());
 	if(!pTelnetServer_->start(g_kbeSrvConfig.getBots().telnet_passwd, 
 		g_kbeSrvConfig.getBots().telnet_deflayer, 
@@ -115,6 +115,14 @@ bool Bots::initializeEnd()
 //-------------------------------------------------------------------------------------
 void Bots::finalise()
 {
+	CLIENTS::iterator iter = clients_.begin();
+	for(; iter != clients_.end(); ++iter)
+	{
+		iter->second->reset();
+	}
+
+	clients_.clear();
+
 	reqCreateAndLoginTotalCount_ = 0;
 	SAFE_RELEASE(pCreateAndLoginHandler_);
 	
@@ -220,7 +228,7 @@ void Bots::handleGameTick()
 	{
 		AUTO_SCOPED_PROFILE("updateBots");
 		CLIENTS::iterator iter = clients().begin();
-		for(;iter != clients().end(); iter++)
+		for(;iter != clients().end(); ++iter)
 			iter->second.get()->gameTick();
 	}
 }
@@ -343,9 +351,7 @@ void Bots::lookApp(Network::Channel* pChannel)
 	int8 istate = 0;
 	(*pBundle) << istate;
 
-	(*pBundle).send(networkInterface(), pChannel);
-
-	Network::Bundle::ObjPool().reclaimObject(pBundle);
+	pChannel->send(pBundle);
 }
 
 //-------------------------------------------------------------------------------------
@@ -357,9 +363,7 @@ void Bots::reqCloseServer(Network::Channel* pChannel, MemoryStream& s)
 	
 	bool success = true;
 	(*pBundle) << success;
-	(*pBundle).send(networkInterface(), pChannel);
-
-	Network::Bundle::ObjPool().reclaimObject(pBundle);
+	pChannel->send(pBundle);
 
 	this->shutDown();
 }
@@ -409,11 +413,11 @@ void Bots::onExecScriptCommand(Network::Channel* pChannel, KBEngine::MemoryStrea
 	if(getScript().run_simpleString(PyBytes_AsString(pycmd1), &retbuf) == 0)
 	{
 		// 将结果返回给客户端
-		Network::Bundle bundle;
+		Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 		ConsoleInterface::ConsoleExecCommandCBMessageHandler msgHandler;
-		bundle.newMessage(msgHandler);
-		ConsoleInterface::ConsoleExecCommandCBMessageHandlerArgs1::staticAddToBundle(bundle, retbuf);
-		bundle.send(this->networkInterface(), pChannel);
+		(*pBundle).newMessage(msgHandler);
+		ConsoleInterface::ConsoleExecCommandCBMessageHandlerArgs1::staticAddToBundle((*pBundle), retbuf);
+		pChannel->send(pBundle);
 	}
 
 	Py_DECREF(pycmd);
@@ -454,7 +458,7 @@ ClientObject* Bots::findClient(Network::Channel * pChannel)
 ClientObject* Bots::findClientByAppID(int32 appID)
 {
 	CLIENTS::iterator iter = clients().begin();
-	for(; iter != clients().end(); iter++)
+	for(; iter != clients().end(); ++iter)
 	{
 		if(iter->second.get()->appID() == appID)
 			return iter->second.get();
@@ -1034,22 +1038,22 @@ void Bots::queryWatcher(Network::Channel* pChannel, MemoryStream& s)
 	MemoryStream::SmartPoolObjectPtr readStreamPtr1 = MemoryStream::createSmartPoolObj();
 	WatcherPaths::root().readChildPaths(path, path, readStreamPtr1.get()->get());
 
-	Network::Bundle bundle;
+	Network::Bundle* pBundle = Network::Bundle::ObjPool().createObject();
 	ConsoleInterface::ConsoleWatcherCBMessageHandler msgHandler;
-	bundle.newMessage(msgHandler);
+	(*pBundle).newMessage(msgHandler);
 
 	uint8 type = 0;
-	bundle << type;
-	bundle.append(readStreamPtr.get()->get());
-	bundle.send(networkInterface(), pChannel);
+	(*pBundle) << type;
+	(*pBundle).append(readStreamPtr.get()->get());
+	pChannel->send(pBundle);
 
-	Network::Bundle bundle1;
-	bundle1.newMessage(msgHandler);
+	Network::Bundle* pBundle1 = Network::Bundle::ObjPool().createObject();
+	(*pBundle1).newMessage(msgHandler);
 
 	type = 1;
-	bundle1 << type;
-	bundle1.append(readStreamPtr1.get()->get());
-	bundle1.send(networkInterface(), pChannel);
+	(*pBundle1) << type;
+	(*pBundle1).append(readStreamPtr1.get()->get());
+	pChannel->send(pBundle1);
 }
 
 
