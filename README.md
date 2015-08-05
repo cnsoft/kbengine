@@ -53,7 +53,7 @@ load-limit depends on the logic of the game itself.)
 ## KBEngine-cocos2dx 
    会实现KBEngine Cocos2dx 版本. 重点是客户端框架封装. 提供和KBE相似的开发流程. 可能无python脚本.但用CPP写逻辑也不错吧.
 
-##Sponsor:ucloud.
+##Sponsor:ucloud.http://www.ucloud.cn/
 ![ucloud](http://incubator.ucloud.cn/styles/images/ucloud_logo.png)
  Thanks for ucloud.com provide demo server for 6 months.
 
